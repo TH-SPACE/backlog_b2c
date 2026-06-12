@@ -16,9 +16,9 @@ const modalOrdensState = {
 };
 
 const MODAL_THEAD_BASE = '<th>Gerenciar</th><th>OS</th><th>Cluster</th><th>Status</th><th>Status Reason</th><th>Data Abertura</th><th>Dias Abertos</th>';
-const MODAL_THEAD_ANOT = '<th>Previsão</th><th>Status Prev.</th><th>Observação</th>';
-const MODAL_THEAD_PADRAO = MODAL_THEAD_BASE + MODAL_THEAD_ANOT;                              // 10 colunas
-const MODAL_THEAD_TECNICA = MODAL_THEAD_BASE + '<th>Dias na Pendência</th>' + MODAL_THEAD_ANOT; // 11 colunas
+const MODAL_THEAD_ANOT = '<th>Previsão</th><th>Status Prev.</th>';
+const MODAL_THEAD_PADRAO = MODAL_THEAD_BASE + MODAL_THEAD_ANOT;                              // 9 colunas
+const MODAL_THEAD_TECNICA = MODAL_THEAD_BASE + '<th>Dias na Pendência</th>' + MODAL_THEAD_ANOT; // 10 colunas
 
 function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -33,17 +33,15 @@ function ordenarPorGerenciamento(ordens, anotacoesMap) {
   return [...ordens].sort((a, b) => temAnot(b) - temAnot(a));
 }
 
-// Células de Previsão / Status / Observação da anotação de uma OS
+// Células de Previsão / Status da anotação de uma OS (observação fica no Gerenciar)
 function celulasAnotacao(anot) {
   const prev = anot && anot.previsao
     ? new Date(anot.previsao).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
     : '—';
   const status = anot && anot.status_prev ? escapeHtml(anot.status_prev) : '—';
-  const obs = anot && anot.observacao ? escapeHtml(anot.observacao) : '—';
   return `
         <td class="td-center td-anot-prev">${prev}</td>
-        <td class="td-center td-anot-status">${status}</td>
-        <td class="td-anot-obs">${obs}</td>`;
+        <td class="td-center td-anot-status">${status}</td>`;
 }
 
 // ── Dropdown com checkbox ──────────────────────────────────────────────────
@@ -304,17 +302,18 @@ function renderVisaoGestao(painel) {
   document.getElementById('pt-media').textContent = r.media_dias ?? '—';
   document.getElementById('pt-max').textContent = r.max_dias ?? '—';
 
-  // Cards de envelhecimento
+  // Cards de envelhecimento (clicáveis quando há ordens)
   const faixas = [
-    { label: '0-2 dias', valor: Number(r.faixa_0_2 || 0), classe: 'aging-ok' },
-    { label: '3-5 dias', valor: Number(r.faixa_3_5 || 0), classe: 'aging-alerta' },
-    { label: '6-10 dias', valor: Number(r.faixa_6_10 || 0), classe: 'aging-grave' },
-    { label: 'Acima de 10 dias', valor: Number(r.faixa_10_mais || 0), classe: 'aging-critico' }
+    { key: 'f0_2', label: '0-2 dias', valor: Number(r.faixa_0_2 || 0), classe: 'aging-ok' },
+    { key: 'f3_5', label: '3-5 dias', valor: Number(r.faixa_3_5 || 0), classe: 'aging-alerta' },
+    { key: 'f6_10', label: '6-10 dias', valor: Number(r.faixa_6_10 || 0), classe: 'aging-grave' },
+    { key: 'f10_mais', label: 'Acima de 10 dias', valor: Number(r.faixa_10_mais || 0), classe: 'aging-critico' }
   ];
   document.getElementById('aging-grid').innerHTML = faixas.map(f => {
     const pct = total > 0 ? ((f.valor / total) * 100).toFixed(1) : '0.0';
+    const clicavel = f.valor > 0 ? ` aging-click" onclick="abrirModalPainel('${f.key}')" title="Ver ordens dessa faixa` : '';
     return `
-      <div class="aging-card ${f.classe}">
+      <div class="aging-card ${f.classe}${clicavel}">
         <span class="aging-num">${f.valor}</span>
         <span class="aging-label">${f.label}</span>
         <span class="aging-pct">${pct}% do total</span>
@@ -335,17 +334,23 @@ function renderVisaoGestao(painel) {
     const pct = tot > 0 ? ((ger / tot) * 100).toFixed(1) : 0;
     const barraClass = pct >= 80 ? 'barra-normal' : pct >= 40 ? 'barra-alerta' : 'barra-critica';
     const acima10 = Number(row.faixa_10_mais || 0);
+    const clusterEnc = encodeURIComponent(row.CLUSTER_ || '');
+    const fmtP = (val, faixaKey, gerenciado = '') => {
+      const n = Number(val || 0);
+      if (!n) return '<span class="num-zero">0</span>';
+      return `<button class="num-link" type="button" onclick="abrirModalPainel('${faixaKey}','${clusterEnc}'${gerenciado !== '' ? `,'${gerenciado}'` : ''})">${n}</button>`;
+    };
     return `
       <tr class="${faltam > 0 ? 'linha-ofensor' : 'linha-ok'}">
         <td class="td-cluster"><strong>${row.CLUSTER_ || '(sem cluster)'}</strong></td>
-        <td class="td-center"><strong>${tot}</strong></td>
-        <td class="td-center">${Number(row.faixa_0_2 || 0)}</td>
-        <td class="td-center">${Number(row.faixa_3_5 || 0)}</td>
-        <td class="td-center">${Number(row.faixa_6_10 || 0)}</td>
-        <td class="td-center">${acima10 > 0 ? `<span class="faixa-chip faixa-ofensor-critico">${acima10}</span>` : '<span class="num-zero">0</span>'}</td>
+        <td class="td-center"><strong>${fmtP(tot, 'total')}</strong></td>
+        <td class="td-center">${fmtP(row.faixa_0_2, 'f0_2')}</td>
+        <td class="td-center">${fmtP(row.faixa_3_5, 'f3_5')}</td>
+        <td class="td-center">${fmtP(row.faixa_6_10, 'f6_10')}</td>
+        <td class="td-center">${acima10 > 0 ? `<span class="faixa-chip faixa-ofensor-critico">${fmtP(acima10, 'f10_mais')}</span>` : '<span class="num-zero">0</span>'}</td>
         <td class="td-center">${row.media_dias ?? '—'}</td>
-        <td class="td-center">${ger}</td>
-        <td class="td-center">${faltam > 0 ? `<strong>${faltam}</strong>` : '<span class="num-zero">0</span>'}</td>
+        <td class="td-center">${fmtP(ger, 'total', '1')}</td>
+        <td class="td-center">${faltam > 0 ? `<strong>${fmtP(faltam, 'total', '0')}</strong>` : '<span class="num-zero">0</span>'}</td>
         <td class="td-center">
           <div class="barra-wrapper">
             <div class="barra-progresso ${barraClass}" style="width:${Math.min(pct, 100)}%"></div>
@@ -481,10 +486,11 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
   modalOrdensState.cluster = cluster;
   modalOrdensState.faixa = faixaKey;
   modalOrdensState._tecnica = null;
+  modalOrdensState._painel = null;
   document.getElementById('modal-thead-row').innerHTML = MODAL_THEAD_PADRAO;
   titulo.textContent = `Ordens de Reparo - ${cluster}`;
   subtitulo.textContent = `Faixa: ${faixaLabel[faixaKey] || faixaKey}`;
-  body.innerHTML = '<tr><td colspan="10" class="td-loading">Carregando...</td></tr>';
+  body.innerHTML = '<tr><td colspan="9" class="td-loading">Carregando...</td></tr>';
 
   try {
     const queryFiltros = buildQueryString();
@@ -495,7 +501,7 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
     if (data.erro) throw new Error(data.erro);
 
     if (!data.ordens || data.ordens.length === 0) {
-      body.innerHTML = '<tr><td colspan="10" class="td-loading">Nenhuma ordem encontrada.</td></tr>';
+      body.innerHTML = '<tr><td colspan="9" class="td-loading">Nenhuma ordem encontrada.</td></tr>';
       return;
     }
 
@@ -533,7 +539,7 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
       </tr>`;
     }).join('');
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="10" class="td-loading">Erro ao carregar: ${err.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="td-loading">Erro ao carregar: ${err.message}</td></tr>`;
   }
 }
 
@@ -551,7 +557,9 @@ function baixarExcelModal() {
   const qs = buildQueryString();
   const sep = qs ? '&' : '?';
   let url;
-  if (modalOrdensState._tecnica) {
+  if (modalOrdensState._painel) {
+    url = `/api/tecnica/painel/ordens/export${montarQueryPainel()}`;
+  } else if (modalOrdensState._tecnica) {
     const { causa, statusReason } = modalOrdensState._tecnica;
     url = `/api/tecnica/ordens/export${qs}${sep}causa=${encodeURIComponent(causa)}&statusReason=${encodeURIComponent(statusReason)}`;
   } else {
@@ -572,25 +580,31 @@ async function abrirModalTecnica(causaEnc, statusReasonEnc) {
   modalOrdensState.cluster = '';
   modalOrdensState.faixa   = '';
   modalOrdensState._tecnica = { causa, statusReason };
+  modalOrdensState._painel = null;
 
   titulo.textContent    = causa ? `Pendências Técnicas — ${causa}` : 'Pendências Técnicas — Todas as causas';
   subtitulo.textContent = statusReason ? `Status Reason: ${statusReason}` : 'Todos os Status Reasons';
   document.getElementById('modal-thead-row').innerHTML = MODAL_THEAD_TECNICA;
-  body.innerHTML = '<tr><td colspan="11" class="td-loading">Carregando...</td></tr>';
+  body.innerHTML = '<tr><td colspan="10" class="td-loading">Carregando...</td></tr>';
   modal.classList.remove('hidden');
   document.body.classList.add('modal-open');
 
+  const qs = buildQueryString();
+  const sep = qs ? '&' : '?';
+  carregarOrdensTecnicaModal(`/api/tecnica/ordens${qs}${sep}causa=${encodeURIComponent(causa)}&statusReason=${encodeURIComponent(statusReason)}`);
+}
+
+// Busca ordens de pendência técnica e preenche o modal (usado pela tabela de causas e pela visão de gestão)
+async function carregarOrdensTecnicaModal(url) {
+  const body = document.getElementById('modal-ordens-body');
   try {
-    const qs = buildQueryString();
-    const sep = qs ? '&' : '?';
-    const url = `/api/tecnica/ordens${qs}${sep}causa=${encodeURIComponent(causa)}&statusReason=${encodeURIComponent(statusReason)}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
     const data = await res.json();
     if (data.erro) throw new Error(data.erro);
 
     if (!data.ordens || data.ordens.length === 0) {
-      body.innerHTML = '<tr><td colspan="11" class="td-loading">Nenhuma ordem encontrada.</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" class="td-loading">Nenhuma ordem encontrada.</td></tr>';
       return;
     }
 
@@ -628,8 +642,51 @@ async function abrirModalTecnica(causaEnc, statusReasonEnc) {
       </tr>`;
     }).join('');
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="11" class="td-loading">Erro ao carregar: ${err.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="10" class="td-loading">Erro ao carregar: ${err.message}</td></tr>`;
   }
+}
+
+// ── Modal da Visão de Gestão (faixas de tempo na pendência) ───────────────
+
+const FAIXA_PENDENCIA_LABEL = {
+  total: 'Todas as faixas',
+  f0_2: '0-2 dias',
+  f3_5: '3-5 dias',
+  f6_10: '6-10 dias',
+  f10_mais: 'Acima de 10 dias'
+};
+
+function montarQueryPainel() {
+  const { faixa, cluster, gerenciado } = modalOrdensState._painel;
+  const qs = buildQueryString();
+  const sep = qs ? '&' : '?';
+  let url = `${qs}${sep}faixa=${encodeURIComponent(faixa)}`;
+  if (cluster) url += `&cluster=${encodeURIComponent(cluster)}`;
+  if (gerenciado === '0' || gerenciado === '1') url += `&gerenciado=${gerenciado}`;
+  return url;
+}
+
+function abrirModalPainel(faixaKey, clusterEnc = '', gerenciado = '') {
+  const cluster = clusterEnc ? decodeURIComponent(clusterEnc) : '';
+  const modal = document.getElementById('modal-ordens');
+  const body = document.getElementById('modal-ordens-body');
+
+  modalOrdensState.cluster = '';
+  modalOrdensState.faixa = '';
+  modalOrdensState._tecnica = null;
+  modalOrdensState._painel = { faixa: faixaKey, cluster, gerenciado: String(gerenciado) };
+
+  document.getElementById('modal-titulo').textContent = `Pendências Técnicas — ${cluster || 'Todos os clusters'}`;
+  const partes = [`Tempo na pendência: ${FAIXA_PENDENCIA_LABEL[faixaKey] || faixaKey}`];
+  if (String(gerenciado) === '1') partes.push('Somente gerenciadas');
+  if (String(gerenciado) === '0') partes.push('Faltam gerenciar');
+  document.getElementById('modal-subtitulo').textContent = partes.join(' | ');
+  document.getElementById('modal-thead-row').innerHTML = MODAL_THEAD_TECNICA;
+  body.innerHTML = '<tr><td colspan="10" class="td-loading">Carregando...</td></tr>';
+  modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+
+  carregarOrdensTecnicaModal(`/api/tecnica/painel/ordens${montarQueryPainel()}`);
 }
 
 // ── Modal Gerenciamento (anotação + histórico) ────────────────────────────
@@ -793,12 +850,10 @@ async function salvarAnotacao(event) {
       if (linha) {
         const prevCell = linha.querySelector('.td-anot-prev');
         const statusCell = linha.querySelector('.td-anot-status');
-        const obsCell = linha.querySelector('.td-anot-obs');
         if (prevCell) prevCell.textContent = payload.previsao
           ? new Date(payload.previsao).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
           : '—';
         if (statusCell) statusCell.textContent = payload.status_prev || '—';
-        if (obsCell) obsCell.textContent = payload.observacao || '—';
       }
     }
 

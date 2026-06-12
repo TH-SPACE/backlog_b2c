@@ -151,6 +151,32 @@ class BacklogController {
     }
   }
 
+  async apiOrdensPainelTecnica(req, res) {
+    try {
+      const filtros = parseFiltros(req.query);
+      const { faixa, cluster, gerenciado } = req.query;
+      const ordens = await backlogModel.getOrdensPainelTecnica(filtros, { faixa, cluster, gerenciado });
+      res.json({ faixa, cluster, gerenciado, total: ordens.length, ordens });
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  }
+
+  async apiOrdensPainelTecnicaExport(req, res) {
+    try {
+      const filtros = parseFiltros(req.query);
+      const { faixa, cluster, gerenciado } = req.query;
+      const ordens = await backlogModel.getOrdensPainelTecnica(filtros, { faixa, cluster, gerenciado, todasColunas: true });
+      const safeFaixa = String(faixa || 'total').replace(/[^a-zA-Z0-9_-]/g, '_');
+      await enviarXlsx(res, `pendencias_tecnicas_${safeFaixa}.xlsx`, [
+        { nome: 'Ordens', rows: ordens }
+      ]);
+    } catch (err) {
+      if (res.headersSent) return res.end();
+      res.status(500).json({ erro: err.message });
+    }
+  }
+
   async apiOrdensTecnicas(req, res) {
     try {
       const { causa, statusReason } = req.query;

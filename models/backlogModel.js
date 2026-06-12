@@ -55,6 +55,64 @@ class BacklogModel {
     ];
   }
 
+  // Join com anotação preenchida = OS gerenciada (índice único por cod_ss, não duplica linhas)
+  _joinAnotacaoPreenchida() {
+    return `
+      LEFT JOIN backlog_anotacoes a
+        ON e.COD_SS = a.cod_ss COLLATE utf8mb4_general_ci
+       AND (COALESCE(a.status_prev, '') <> '' OR a.previsao IS NOT NULL OR COALESCE(a.observacao, '') <> '')
+    `;
+  }
+
+  _getFaixaPendenciaCondition(faixaKey) {
+    const expr = 'DATEDIFF(NOW(), e.DATA_STATUS)';
+    const mapa = {
+      total: '1=1',
+      f0_2: `${expr} <= 2`,
+      f3_5: `${expr} BETWEEN 3 AND 5`,
+      f6_10: `${expr} BETWEEN 6 AND 10`,
+      f10_mais: `${expr} > 10`
+    };
+    return mapa[faixaKey] || null;
+  }
+
+  async getOrdensPainelTecnica(filtros = {}, opcoes = {}) {
+    const faixaCondition = this._getFaixaPendenciaCondition(opcoes.faixa || 'total');
+    if (!faixaCondition) {
+      throw new Error('Faixa inválida');
+    }
+
+    const { where, params } = this._buildWhere(filtros);
+    const conds = [];
+    const sqlParams = [...params];
+    if (where) conds.push(where.replace(/^WHERE\s+/i, ''));
+    conds.push(...this._condicoesTecnica());
+    conds.push(faixaCondition);
+    if (opcoes.cluster) {
+      conds.push('e.CLUSTER_ = ?');
+      sqlParams.push(opcoes.cluster);
+    }
+    if (String(opcoes.gerenciado) === '1') conds.push('a.cod_ss IS NOT NULL');
+    if (String(opcoes.gerenciado) === '0') conds.push('a.cod_ss IS NULL');
+
+    // Qualifica as colunas com "e." por causa do join (cod_ss existe nas duas tabelas)
+    const colunas = opcoes.todasColunas
+      ? 'e.*'
+      : COLUNAS_MODAL.split(', ').map(c => `e.${c}`).join(', ');
+
+    const query = `
+      SELECT ${colunas},
+        DATEDIFF(NOW(), e.DATA_ABERTURA) AS dias_abertos,
+        DATEDIFF(NOW(), e.DATA_STATUS) AS dias_pendencia
+      FROM backlog_elos e
+      ${this._joinAnotacaoPreenchida()}
+      WHERE ${conds.join(' AND ')}
+      ORDER BY DATEDIFF(NOW(), e.DATA_STATUS) DESC, e.DATA_ABERTURA ASC
+    `;
+    const [rows] = await pool.query(query, sqlParams);
+    return rows;
+  }
+
   _buildWhere(filtros = {}) {
     const conds = this._condicoesBase();
     const params = [];
@@ -255,12 +313,7 @@ class BacklogModel {
     conds.push(...this._condicoesTecnica());
     const whereTec = `WHERE ${conds.join(' AND ')}`;
     const dias = 'DATEDIFF(NOW(), e.DATA_STATUS)';
-    // Anotação preenchida = OS gerenciada (índice único por cod_ss, não duplica linhas)
-    const joinAnot = `
-      LEFT JOIN backlog_anotacoes a
-        ON e.COD_SS = a.cod_ss COLLATE utf8mb4_general_ci
-       AND (COALESCE(a.status_prev, '') <> '' OR a.previsao IS NOT NULL OR COALESCE(a.observacao, '') <> '')
-    `;
+    const joinAnot = this._joinAnotacaoPreenchida();
     const faixas = `
       SUM(CASE WHEN ${dias} <= 2 THEN 1 ELSE 0 END) AS faixa_0_2,
       SUM(CASE WHEN ${dias} BETWEEN 3 AND 5 THEN 1 ELSE 0 END) AS faixa_3_5,

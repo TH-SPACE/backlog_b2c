@@ -8,6 +8,8 @@ router.get('/dados', backlogController.apiDados.bind(backlogController));
 router.get('/export', backlogController.apiExportGeral.bind(backlogController));
 router.get('/cluster/:cluster', backlogController.apiCluster.bind(backlogController));
 router.get('/tecnica/painel', backlogController.apiPainelTecnica.bind(backlogController));
+router.get('/tecnica/painel/ordens', backlogController.apiOrdensPainelTecnica.bind(backlogController));
+router.get('/tecnica/painel/ordens/export', backlogController.apiOrdensPainelTecnicaExport.bind(backlogController));
 router.get('/tecnica/ordens', backlogController.apiOrdensTecnicas.bind(backlogController));
 router.get('/tecnica/ordens/export', backlogController.apiOrdensTecnicasExport.bind(backlogController));
 router.get('/cluster/:cluster/ordens', backlogController.apiOrdens.bind(backlogController));
