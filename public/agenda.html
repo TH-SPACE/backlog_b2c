@@ -146,18 +146,40 @@
 
   </main>
 
-  <!-- Sub-modal de Anotação -->
+  <!-- Sub-modal de Gerenciamento -->
   <div id="modal-anotacao" class="modal-overlay hidden" onclick="fecharModalAnotacao(event)">
     <div class="modal-box modal-box-sm" onclick="event.stopPropagation()">
       <div class="modal-header">
-        <h3>Anotação</h3>
+        <h3 id="anotacao-titulo">Gerenciar OS</h3>
         <button class="modal-close" onclick="fecharModalAnotacao()">✕</button>
       </div>
       <div class="modal-subtitulo" id="anotacao-os-label"></div>
-      <form id="form-anotacao" onsubmit="salvarAnotacao(event)">
+
+      <div class="historico-bloco historico-bloco-topo">
+        <h4 class="historico-titulo">📜 Histórico de gerenciamento</h4>
+        <div id="anotacao-historico" class="historico-lista">
+          <span class="td-loading">Carregando...</span>
+        </div>
+      </div>
+
+      <div class="form-actions" id="acao-novo-gerenciamento">
+        <button type="button" class="btn-aplicar" onclick="mostrarFormGerenciamento()">➕ Enviar novo gerenciamento</button>
+      </div>
+
+      <form id="form-anotacao" class="hidden" onsubmit="salvarAnotacao(event)">
         <div class="form-group">
           <label class="form-label">Previsão de conclusão</label>
-          <input type="datetime-local" id="anotacao-previsao" class="form-input" />
+          <div class="prev-rapida">
+            <button type="button" class="chip-data" onclick="setPrevisaoRapida(0)">Hoje</button>
+            <button type="button" class="chip-data" onclick="setPrevisaoRapida(1)">Amanhã</button>
+            <button type="button" class="chip-data" onclick="setPrevisaoRapida(2)">+2 dias</button>
+            <button type="button" class="chip-data" onclick="setPrevisaoRapida(7)">+1 semana</button>
+            <button type="button" class="chip-data chip-data-limpar" onclick="limparPrevisao()">Limpar</button>
+          </div>
+          <div class="prev-campos">
+            <input type="date" id="anotacao-data" class="form-input" />
+            <select id="anotacao-hora" class="form-input"></select>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Status</label>
@@ -179,8 +201,8 @@
           <textarea id="anotacao-obs" class="form-input form-textarea" rows="3" placeholder="Descreva a situação..."></textarea>
         </div>
         <div class="form-actions">
-          <button type="button" class="btn-limpar-filtros" onclick="fecharModalAnotacao()">Cancelar</button>
-          <button type="submit" class="btn-aplicar" id="btn-salvar-anotacao">💾 Salvar</button>
+          <button type="button" class="btn-limpar-filtros" onclick="cancelarFormGerenciamento()">Cancelar</button>
+          <button type="submit" class="btn-aplicar" id="btn-salvar-anotacao">💾 Enviar Status</button>
         </div>
       </form>
     </div>

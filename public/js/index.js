@@ -775,7 +775,7 @@ async function carregarHistorico(codSs) {
   }
 }
 
-async function abrirModalAnotacao(codSs) {
+function abrirModalAnotacao(codSs) {
   anotacaoState.codSs = codSs;
   const modal = document.getElementById('modal-anotacao');
   document.getElementById('anotacao-os-label').textContent = `OS: ${codSs}`;
@@ -790,26 +790,6 @@ async function abrirModalAnotacao(codSs) {
 
   modal.classList.remove('hidden');
   carregarHistorico(codSs);
-
-  // Carrega o último gerenciamento para facilitar a edição
-  try {
-    const res = await fetch(`/api/anotacoes?codSs=${encodeURIComponent(codSs)}`);
-    if (res.ok) {
-      const mapa = await res.json();
-      const a = mapa[codSs];
-      if (a) {
-        if (a.previsao) {
-          const d = new Date(a.previsao);
-          const pad = n => String(n).padStart(2, '0');
-          document.getElementById('anotacao-data').value =
-            `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-          setHoraSelect(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
-        }
-        document.getElementById('anotacao-status').value = a.status_prev || '';
-        document.getElementById('anotacao-obs').value = a.observacao || '';
-      }
-    }
-  } catch (_) { /* ignora erro de carregamento */ }
 }
 
 function fecharModalAnotacao(event) {

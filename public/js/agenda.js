@@ -1,8 +1,8 @@
 document.getElementById('ano').textContent = new Date().getFullYear();
 
-// ── Ícones SVG inline ────────────────────────────────────────────────────
-const ICONE_VER = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3" fill="#16a34a" stroke="#16a34a"/></svg>`;
-const ICONE_EDITAR = `<img src="/svg/vivo-formulario-folha-lapis-purpura-esquerda-320x320.svg" width="18" height="18" style="vertical-align:middle;opacity:.7" alt="gerenciar" />`;
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 const DEFAULT_REGIONAIS  = ['CENTRO OESTE'];
 const DEFAULT_TECNOLOGIAS = ['GPON'];
@@ -214,8 +214,8 @@ function renderAgenda(agenda) {
     return `
       <tr class="${ofensorCls}">
         <td class="td-center">
-          <button class="btn-anot-icone btn-anot-preenchido" title="Editar anotação"
-            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}')">            ${ICONE_VER}</button>
+          <button class="btn-gerenciar btn-gerenciado" title="Ver e enviar gerenciamento"
+            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}')">✓ Gerenciado</button>
         </td>
         <td>${codSs || '—'}</td>
         <td>${a.CLUSTER_ ?? '—'}</td>
@@ -229,39 +229,107 @@ function renderAgenda(agenda) {
   }).join('');
 }
 
-// ── Modal Anotação ─────────────────────────────────────────────────────────
+// ── Modal Gerenciamento (anotação + histórico) ─────────────────────────────
 
 const anotacaoState = { codSs: '' };
 
-async function abrirModalAnotacao(codSs) {
+// Popula o select de hora (06:00 às 22:00, de 30 em 30 min)
+(function popularHoras() {
+  const sel = document.getElementById('anotacao-hora');
+  const opcoes = [];
+  for (let h = 6; h <= 22; h++) {
+    for (const m of ['00', '30']) {
+      if (h === 22 && m === '30') continue;
+      const hora = `${String(h).padStart(2, '0')}:${m}`;
+      opcoes.push(`<option value="${hora}"${hora === '18:00' ? ' selected' : ''}>${hora}</option>`);
+    }
+  }
+  sel.innerHTML = opcoes.join('');
+})();
+
+function setHoraSelect(hora) {
+  const sel = document.getElementById('anotacao-hora');
+  if (![...sel.options].some(opt => opt.value === hora)) {
+    sel.insertAdjacentHTML('beforeend', `<option value="${hora}">${hora}</option>`);
+  }
+  sel.value = hora;
+}
+
+function setPrevisaoRapida(diasAFrente) {
+  const d = new Date();
+  d.setDate(d.getDate() + diasAFrente);
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('anotacao-data').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function limparPrevisao() {
+  document.getElementById('anotacao-data').value = '';
+  document.getElementById('anotacao-hora').value = '18:00';
+}
+
+function mostrarFormGerenciamento() {
+  document.getElementById('acao-novo-gerenciamento').classList.add('hidden');
+  document.getElementById('form-anotacao').classList.remove('hidden');
+}
+
+function cancelarFormGerenciamento() {
+  document.getElementById('form-anotacao').classList.add('hidden');
+  document.getElementById('acao-novo-gerenciamento').classList.remove('hidden');
+}
+
+function renderHistorico(itens) {
+  const div = document.getElementById('anotacao-historico');
+  if (!itens || !itens.length) {
+    div.innerHTML = '<span class="historico-vazio">Nenhum gerenciamento registrado ainda.</span>';
+    return;
+  }
+  div.innerHTML = itens.map(h => {
+    const quando = h.criado_em
+      ? new Date(h.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+      : '—';
+    const prev = h.previsao
+      ? new Date(h.previsao).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+      : null;
+    return `
+      <div class="historico-item">
+        <div class="historico-meta">
+          <span class="historico-quando">${quando}</span>
+          ${h.status_prev ? `<span class="historico-status">${escapeHtml(h.status_prev)}</span>` : ''}
+          ${prev ? `<span class="historico-prev">Prev: ${prev}</span>` : ''}
+        </div>
+        ${h.observacao ? `<div class="historico-obs">${escapeHtml(h.observacao)}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function carregarHistorico(codSs) {
+  const div = document.getElementById('anotacao-historico');
+  div.innerHTML = '<span class="td-loading">Carregando...</span>';
+  try {
+    const res = await fetch(`/api/anotacao/${encodeURIComponent(codSs)}/historico`);
+    if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+    const data = await res.json();
+    renderHistorico(data.historico || []);
+  } catch (err) {
+    div.innerHTML = `<span class="historico-vazio">Erro ao carregar histórico: ${err.message}</span>`;
+  }
+}
+
+function abrirModalAnotacao(codSs) {
   anotacaoState.codSs = codSs;
   const modal = document.getElementById('modal-anotacao');
   document.getElementById('anotacao-os-label').textContent = `OS: ${codSs}`;
-  document.getElementById('anotacao-previsao').value = '';
+  limparPrevisao();
   document.getElementById('anotacao-status').value = '';
   document.getElementById('anotacao-obs').value = '';
   document.getElementById('btn-salvar-anotacao').disabled = false;
-  document.getElementById('btn-salvar-anotacao').textContent = '💾 Salvar';
+  document.getElementById('btn-salvar-anotacao').textContent = '💾 Enviar Status';
 
-  try {
-    const res = await fetch(`/api/anotacoes?codSs=${encodeURIComponent(codSs)}`);
-    if (res.ok) {
-      const mapa = await res.json();
-      const a = mapa[codSs];
-      if (a) {
-        if (a.previsao) {
-          const d = new Date(a.previsao);
-          const pad = n => String(n).padStart(2, '0');
-          document.getElementById('anotacao-previsao').value =
-            `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        }
-        document.getElementById('anotacao-status').value = a.status_prev || '';
-        document.getElementById('anotacao-obs').value = a.observacao || '';
-      }
-    }
-  } catch (_) {}
+  // Abre mostrando só o histórico; o formulário aparece ao clicar em "novo gerenciamento"
+  cancelarFormGerenciamento();
 
   modal.classList.remove('hidden');
+  carregarHistorico(codSs);
 }
 
 function fecharModalAnotacao(event) {
@@ -273,10 +341,12 @@ async function salvarAnotacao(event) {
   event.preventDefault();
   const btn = document.getElementById('btn-salvar-anotacao');
   btn.disabled = true;
-  btn.textContent = 'Salvando...';
+  btn.textContent = 'Enviando...';
 
+  const dataPrev = document.getElementById('anotacao-data').value;
+  const horaPrev = document.getElementById('anotacao-hora').value || '18:00';
   const payload = {
-    previsao:    document.getElementById('anotacao-previsao').value || null,
+    previsao:    dataPrev ? `${dataPrev}T${horaPrev}` : null,
     status_prev: document.getElementById('anotacao-status').value,
     observacao:  document.getElementById('anotacao-obs').value || null
   };
@@ -290,12 +360,20 @@ async function salvarAnotacao(event) {
     if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
     const data = await res.json();
     if (data.erro) throw new Error(data.erro);
-    document.getElementById('modal-anotacao').classList.add('hidden');
+
+    // Mantém a tela aberta, atualiza histórico e recarrega a agenda atrás
+    carregarHistorico(anotacaoState.codSs);
     carregarAgenda();
+    btn.textContent = '✓ Enviado!';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = '💾 Enviar Status';
+      cancelarFormGerenciamento();
+    }, 1200);
   } catch (err) {
     btn.disabled = false;
-    btn.textContent = '💾 Salvar';
-    alert(`Erro ao salvar: ${err.message}`);
+    btn.textContent = '💾 Enviar Status';
+    alert(`Erro ao enviar: ${err.message}`);
   }
 }
 

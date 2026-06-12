@@ -670,6 +670,22 @@ body {
 
 .num-link:hover {
   color: #0f172a;
+  text-decoration: underline;
+}
+
+/* Amplia a área de clique: a célula inteira aciona o número */
+.tabela-cluster td {
+  position: relative;
+}
+
+.tabela-cluster td .num-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.tabela-cluster td:hover .num-link {
+  text-decoration: underline;
 }
 
 .linha-total {
