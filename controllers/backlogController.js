@@ -220,6 +220,7 @@ class BacklogController {
         ordens
       });
     } catch (err) {
+      console.error('[apiOrdens] Erro:', err.message);
       res.status(500).json({ erro: err.message });
     }
   }
@@ -276,9 +277,9 @@ class BacklogController {
   async apiSalvarAnotacao(req, res) {
     try {
       const { codSs } = req.params;
-      const { previsao, status_prev, observacao } = req.body;
+      const { previsao, status_prev, observacao, designator, tempo_fil } = req.body;
       if (!codSs) return res.status(400).json({ erro: 'codSs é obrigatório' });
-      await backlogModel.upsertAnotacao(codSs, { previsao, status_prev, observacao });
+      await backlogModel.upsertAnotacao(codSs, { previsao, status_prev, observacao, designator, tempo_fil });
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ erro: err.message });

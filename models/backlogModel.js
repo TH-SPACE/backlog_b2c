@@ -7,6 +7,8 @@ const pool = require('../config/database');
       CREATE TABLE IF NOT EXISTS backlog_anotacoes (
         id             INT AUTO_INCREMENT PRIMARY KEY,
         cod_ss         VARCHAR(100) NOT NULL,
+        designator     VARCHAR(200) NULL,
+        tempo_fil      VARCHAR(100) NULL,
         previsao       DATETIME     NULL,
         status_prev    VARCHAR(100) NOT NULL DEFAULT '',
         observacao     TEXT         NULL,
@@ -20,6 +22,8 @@ const pool = require('../config/database');
       CREATE TABLE IF NOT EXISTS backlog_anotacoes_historico (
         id             INT AUTO_INCREMENT PRIMARY KEY,
         cod_ss         VARCHAR(100) NOT NULL,
+        designator     VARCHAR(200) NULL,
+        tempo_fil      VARCHAR(100) NULL,
         previsao       DATETIME     NULL,
         status_prev    VARCHAR(100) NOT NULL DEFAULT '',
         observacao     TEXT         NULL,
@@ -27,6 +31,15 @@ const pool = require('../config/database');
         INDEX idx_hist_cod_ss (cod_ss)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    // Migração: adiciona coluna nas tabelas que já existiam sem ela
+    for (const tabela of ['backlog_anotacoes', 'backlog_anotacoes_historico']) {
+      try {
+        await pool.query(`ALTER TABLE ${tabela} ADD COLUMN IF NOT EXISTS designator VARCHAR(200) NULL AFTER cod_ss`);
+      } catch (_) { /* ignora */ }
+      try {
+        await pool.query(`ALTER TABLE ${tabela} ADD COLUMN IF NOT EXISTS tempo_fil VARCHAR(100) NULL AFTER designator`);
+      } catch (_) { /* ignora */ }
+    }
   } catch (e) {
     console.error('[backlog_anotacoes] Erro ao criar tabela:', e.message);
   }
@@ -162,6 +175,7 @@ class BacklogModel {
       SELECT
         CLUSTER_,
         COUNT(*) AS total,
+        SUM(CASE WHEN TIMESTAMPDIFF(HOUR, DATA_ABERTURA, NOW()) < 24 THEN 1 ELSE 0 END) AS faixa_0_1_dia,
         SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) = 0 THEN 1 ELSE 0 END) AS faixa_hoje,
         SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) = 1 THEN 1 ELSE 0 END) AS faixa_1_dia,
         SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) = 2 THEN 1 ELSE 0 END) AS faixa_2_dias,
@@ -170,8 +184,8 @@ class BacklogModel {
         SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) BETWEEN 5 AND 7 THEN 1 ELSE 0 END) AS faixa_5_7,
         SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) BETWEEN 8 AND 15 THEN 1 ELSE 0 END) AS faixa_8_15,
         SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) > 15 THEN 1 ELSE 0 END) AS faixa_15_mais,
-        SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) > 4 THEN 1 ELSE 0 END) AS ofensores,
-        SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) <= 4 THEN 1 ELSE 0 END) AS dentro_prazo
+        SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) >= 4 THEN 1 ELSE 0 END) AS ofensores,
+        SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) < 4 THEN 1 ELSE 0 END) AS dentro_prazo
       FROM backlog_elos
       ${where}
       GROUP BY CLUSTER_
@@ -187,7 +201,7 @@ class BacklogModel {
       SELECT
         *,
         DATEDIFF(NOW(), DATA_ABERTURA) AS dias_abertos,
-        CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) > 4 THEN 1 ELSE 0 END AS ofensor
+        CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) >= 4 THEN 1 ELSE 0 END AS ofensor
       FROM backlog_elos
       ${where}
       ORDER BY DATEDIFF(NOW(), DATA_ABERTURA) DESC, DATA_ABERTURA ASC
@@ -203,7 +217,7 @@ class BacklogModel {
       SELECT
         *,
         DATEDIFF(NOW(), DATA_ABERTURA) AS dias_abertos,
-        CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) > 4 THEN 1 ELSE 0 END AS ofensor
+        CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) >= 4 THEN 1 ELSE 0 END AS ofensor
       FROM backlog_elos
       ${clusterCond}
       ORDER BY DATEDIFF(NOW(), DATA_ABERTURA) DESC
@@ -217,8 +231,8 @@ class BacklogModel {
     const query = `
       SELECT
         COUNT(*) AS total_geral,
-        SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) > 4 THEN 1 ELSE 0 END) AS total_ofensores,
-        SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) <= 4 THEN 1 ELSE 0 END) AS total_dentro_prazo,
+        SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) >= 4 THEN 1 ELSE 0 END) AS total_ofensores,
+        SUM(CASE WHEN DATEDIFF(NOW(), DATA_ABERTURA) < 4 THEN 1 ELSE 0 END) AS total_dentro_prazo,
         COUNT(DISTINCT CLUSTER_) AS total_clusters,
         ROUND(AVG(DATEDIFF(NOW(), DATA_ABERTURA)), 1) AS media_dias_geral
       FROM backlog_elos
@@ -244,7 +258,7 @@ class BacklogModel {
         END AS faixa,
         COUNT(*) AS quantidade,
         CASE
-          WHEN DATEDIFF(NOW(), DATA_ABERTURA) > 4 THEN 1 ELSE 0
+          WHEN DATEDIFF(NOW(), DATA_ABERTURA) >= 4 THEN 1 ELSE 0
         END AS eh_ofensor
       FROM backlog_elos
       ${where}
@@ -380,6 +394,7 @@ class BacklogModel {
     const expr = 'DATEDIFF(NOW(), DATA_ABERTURA)';
     const mapa = {
       total: '1=1',
+      dia_0_1: `TIMESTAMPDIFF(HOUR, DATA_ABERTURA, NOW()) < 24`,
       hoje: `${expr} = 0`,
       dia_1: `${expr} = 1`,
       dia_2: `${expr} = 2`,
@@ -388,7 +403,7 @@ class BacklogModel {
       dia_5_7: `${expr} BETWEEN 5 AND 7`,
       dia_8_15: `${expr} BETWEEN 8 AND 15`,
       dia_15_mais: `${expr} > 15`,
-      ofensores: `${expr} > 4`
+      ofensores: `${expr} >= 4`
     };
     return mapa[faixaKey] || null;
   }
@@ -514,18 +529,22 @@ class BacklogModel {
     return mapa;
   }
 
-  async upsertAnotacao(codSs, { previsao, status_prev, observacao }) {
+  async upsertAnotacao(codSs, { previsao, status_prev, observacao, designator, tempo_fil }) {
     const valores = [
       String(codSs),
-      previsao || null,
+      designator || null,
+      tempo_fil  || null,
+      previsao   || null,
       String(status_prev || ''),
       observacao || null
     ];
     // Mantém o snapshot atual (backlog_anotacoes) e registra no histórico
     await pool.query(
-      `INSERT INTO backlog_anotacoes (cod_ss, previsao, status_prev, observacao)
-       VALUES (?, ?, ?, ?)
+      `INSERT INTO backlog_anotacoes (cod_ss, designator, tempo_fil, previsao, status_prev, observacao)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
+         designator    = VALUES(designator),
+         tempo_fil     = VALUES(tempo_fil),
          previsao      = VALUES(previsao),
          status_prev   = VALUES(status_prev),
          observacao    = VALUES(observacao),
@@ -533,8 +552,8 @@ class BacklogModel {
       valores
     );
     await pool.query(
-      `INSERT INTO backlog_anotacoes_historico (cod_ss, previsao, status_prev, observacao)
-       VALUES (?, ?, ?, ?)`,
+      `INSERT INTO backlog_anotacoes_historico (cod_ss, designator, tempo_fil, previsao, status_prev, observacao)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       valores
     );
   }

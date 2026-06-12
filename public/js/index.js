@@ -205,7 +205,7 @@ async function carregarDados() {
   const tbodyTecnica = document.getElementById('tbody-tecnica');
   const estadoMsg = document.getElementById('estado-msg');
 
-  tbody.innerHTML = '<tr><td colspan="12" class="td-loading">Carregando dados...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="13" class="td-loading">Carregando dados...</td></tr>';
   tbodyTecnica.innerHTML = '<tr><td colspan="5" class="td-loading">Carregando pendências técnicas...</td></tr>';
   document.getElementById('tbody-cluster-tecnica').innerHTML = '<tr><td colspan="10" class="td-loading">Carregando...</td></tr>';
   document.getElementById('aging-grid').innerHTML = '<div class="td-loading">Carregando...</div>';
@@ -387,6 +387,7 @@ function renderTabelaCluster(porCluster) {
 
   const totais = porCluster.reduce((acc, row) => {
     acc.total += Number(row.total || 0);
+    acc.faixa_0_1_dia += Number(row.faixa_0_1_dia || 0);
     acc.faixa_hoje += Number(row.faixa_hoje || 0);
     acc.faixa_1_dia += Number(row.faixa_1_dia || 0);
     acc.faixa_2_dias += Number(row.faixa_2_dias || 0);
@@ -399,6 +400,7 @@ function renderTabelaCluster(porCluster) {
     return acc;
   }, {
     total: 0,
+    faixa_0_1_dia: 0,
     faixa_hoje: 0,
     faixa_1_dia: 0,
     faixa_2_dias: 0,
@@ -422,6 +424,7 @@ function renderTabelaCluster(porCluster) {
         <td class="td-cluster"><strong>${row.CLUSTER_ || '(sem cluster)'}</strong></td>
         <td class="td-center">${formatNumeroCelula(row.total, row.CLUSTER_, 'total')}</td>
         <td class="td-center">${formatNumeroCelula(row.faixa_hoje, row.CLUSTER_, 'hoje')}</td>
+        <td class="td-center">${formatNumeroCelula(row.faixa_0_1_dia, row.CLUSTER_, 'dia_0_1')}</td>
         <td class="td-center">${formatNumeroCelula(row.faixa_1_dia, row.CLUSTER_, 'dia_1')}</td>
         <td class="td-center">${formatNumeroCelula(row.faixa_2_dias, row.CLUSTER_, 'dia_2')}</td>
         <td class="td-center">${formatNumeroCelula(row.faixa_3_dias, row.CLUSTER_, 'dia_3')}</td>
@@ -448,6 +451,7 @@ function renderTabelaCluster(porCluster) {
       <td class="td-cluster"><strong>Total Geral</strong></td>
       <td class="td-center"><strong>${totais.total}</strong></td>
       <td class="td-center"><strong>${totais.faixa_hoje}</strong></td>
+      <td class="td-center"><strong>${totais.faixa_0_1_dia}</strong></td>
       <td class="td-center"><strong>${totais.faixa_1_dia}</strong></td>
       <td class="td-center"><strong>${totais.faixa_2_dias}</strong></td>
       <td class="td-center"><strong>${totais.faixa_3_dias}</strong></td>
@@ -470,6 +474,7 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
   const subtitulo = document.getElementById('modal-subtitulo');
   const faixaLabel = {
     total: 'Total',
+    dia_0_1: '0-1 dia (< 24h)',
     hoje: 'Hoje',
     dia_1: '1 dia',
     dia_2: '2 dias',
@@ -478,7 +483,7 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
     dia_5_7: '5-7 dias',
     dia_8_15: '8-15 dias',
     dia_15_mais: 'Acima de 15 dias',
-    ofensores: 'Ofensores (>4 dias)'
+    ofensores: 'Ofensores (≥4 dias)'
   };
 
   modal.classList.remove('hidden');
@@ -516,6 +521,8 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
 
     body.innerHTML = ordenarPorGerenciamento(data.ordens, anotacoesMap).map(o => {
       const codSs = o.COD_SS ?? '';
+      const designator = (o.DESIGNATOR ?? '').replace(/'/g, "\\'");
+      const tempoFil = (o.TEMPO_FIL ?? '').toString().replace(/'/g, "\\'");
       const anot = anotacoesMap[codSs];
       const temAnotacao = !!(anot && (anot.status_prev || anot.previsao || anot.observacao));
       const btnCls = temAnotacao ? 'btn-gerenciar btn-gerenciado' : 'btn-gerenciar';
@@ -526,7 +533,7 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
       <tr>
         <td class="td-center">
           <button class="${btnCls}" title="${btnTitle.replace(/"/g, '&quot;')}"
-            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}')">
+            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}','${designator}','${tempoFil}')">
             ${temAnotacao ? '✓ Gerenciado' : 'Gerenciar'}
           </button>
         </td>
@@ -618,6 +625,8 @@ async function carregarOrdensTecnicaModal(url) {
 
     body.innerHTML = ordenarPorGerenciamento(data.ordens, anotacoesMap).map(o => {
       const codSs = o.COD_SS ?? '';
+      const designator = (o.DESIGNATOR ?? '').replace(/'/g, "\\'");
+      const tempoFil = (o.TEMPO_FIL ?? '').toString().replace(/'/g, "\\'");
       const anot = anotacoesMap[codSs];
       const temAnotacao = !!(anot && (anot.status_prev || anot.previsao || anot.observacao));
       const btnCls = temAnotacao ? 'btn-gerenciar btn-gerenciado' : 'btn-gerenciar';
@@ -628,7 +637,7 @@ async function carregarOrdensTecnicaModal(url) {
       <tr>
         <td class="td-center">
           <button class="${btnCls}" title="${btnTitle.replace(/"/g, '&quot;')}"
-            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}')">
+            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}','${designator}','${tempoFil}')">
             ${temAnotacao ? '✓ Gerenciado' : 'Gerenciar'}
           </button>
         </td>
@@ -691,7 +700,7 @@ function abrirModalPainel(faixaKey, clusterEnc = '', gerenciado = '') {
 
 // ── Modal Gerenciamento (anotação + histórico) ────────────────────────────
 
-const anotacaoState = { codSs: '' };
+const anotacaoState = { codSs: '', designator: '', tempoFil: '' };
 
 // Popula o select de hora (06:00 às 22:00, de 30 em 30 min)
 (function popularHoras() {
@@ -775,8 +784,10 @@ async function carregarHistorico(codSs) {
   }
 }
 
-function abrirModalAnotacao(codSs) {
+function abrirModalAnotacao(codSs, designator = '', tempoFil = '') {
   anotacaoState.codSs = codSs;
+  anotacaoState.designator = designator;
+  anotacaoState.tempoFil = tempoFil;
   const modal = document.getElementById('modal-anotacao');
   document.getElementById('anotacao-os-label').textContent = `OS: ${codSs}`;
   limparPrevisao();
@@ -808,7 +819,9 @@ async function salvarAnotacao(event) {
   const payload = {
     previsao: dataPrev ? `${dataPrev}T${horaPrev}` : null,
     status_prev: document.getElementById('anotacao-status').value,
-    observacao: document.getElementById('anotacao-obs').value || null
+    observacao: document.getElementById('anotacao-obs').value || null,
+    designator: anotacaoState.designator || null,
+    tempo_fil:  anotacaoState.tempoFil   || null
   };
 
   try {

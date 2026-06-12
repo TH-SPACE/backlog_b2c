@@ -210,12 +210,14 @@ function renderAgenda(agenda) {
       ? `<span class="agenda-badge ${corCls}">${a.status_prev}</span>`
       : '<span class="agenda-badge agenda-status-vazio">—</span>';
     const codSs = a.cod_ss || '';
-    const ofensorCls = Number(a.dias_abertos) > 4 ? 'linha-ofensor' : '';
+    const designator = (a.DESIGNATOR ?? '').replace(/'/g, "\\'");
+    const tempoFil = (a.TEMPO_FIL ?? '').toString().replace(/'/g, "\\'");
+    const ofensorCls = Number(a.dias_abertos) >= 4 ? 'linha-ofensor' : '';
     return `
       <tr class="${ofensorCls}">
         <td class="td-center">
           <button class="btn-gerenciar btn-gerenciado" title="Ver e enviar gerenciamento"
-            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}')">✓ Gerenciado</button>
+            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}','${designator}','${tempoFil}')">✓ Gerenciado</button>
         </td>
         <td>${codSs || '—'}</td>
         <td>${a.CLUSTER_ ?? '—'}</td>
@@ -231,7 +233,7 @@ function renderAgenda(agenda) {
 
 // ── Modal Gerenciamento (anotação + histórico) ─────────────────────────────
 
-const anotacaoState = { codSs: '' };
+const anotacaoState = { codSs: '', designator: '', tempoFil: '' };
 
 // Popula o select de hora (06:00 às 22:00, de 30 em 30 min)
 (function popularHoras() {
@@ -315,8 +317,10 @@ async function carregarHistorico(codSs) {
   }
 }
 
-function abrirModalAnotacao(codSs) {
+function abrirModalAnotacao(codSs, designator = '', tempoFil = '') {
   anotacaoState.codSs = codSs;
+  anotacaoState.designator = designator;
+  anotacaoState.tempoFil = tempoFil;
   const modal = document.getElementById('modal-anotacao');
   document.getElementById('anotacao-os-label').textContent = `OS: ${codSs}`;
   limparPrevisao();
@@ -348,7 +352,9 @@ async function salvarAnotacao(event) {
   const payload = {
     previsao:    dataPrev ? `${dataPrev}T${horaPrev}` : null,
     status_prev: document.getElementById('anotacao-status').value,
-    observacao:  document.getElementById('anotacao-obs').value || null
+    observacao:  document.getElementById('anotacao-obs').value || null,
+    designator:  anotacaoState.designator || null,
+    tempo_fil:   anotacaoState.tempoFil   || null
   };
 
   try {
