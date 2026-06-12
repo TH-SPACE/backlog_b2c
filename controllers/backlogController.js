@@ -277,9 +277,9 @@ class BacklogController {
   async apiSalvarAnotacao(req, res) {
     try {
       const { codSs } = req.params;
-      const { previsao, status_prev, observacao, designator, tempo_fil } = req.body;
+      const { previsao, status_prev, observacao, designator, dias_aberto, data_abertura } = req.body;
       if (!codSs) return res.status(400).json({ erro: 'codSs é obrigatório' });
-      await backlogModel.upsertAnotacao(codSs, { previsao, status_prev, observacao, designator, tempo_fil });
+      await backlogModel.upsertAnotacao(codSs, { previsao, status_prev, observacao, designator, dias_aberto, data_abertura });
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ erro: err.message });

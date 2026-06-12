@@ -210,14 +210,15 @@ function renderAgenda(agenda) {
       ? `<span class="agenda-badge ${corCls}">${a.status_prev}</span>`
       : '<span class="agenda-badge agenda-status-vazio">—</span>';
     const codSs = a.cod_ss || '';
-    const designator = (a.DESIGNATOR ?? '').replace(/'/g, "\\'");
-    const tempoFil = (a.TEMPO_FIL ?? '').toString().replace(/'/g, "\\'");
+    const designator   = (a.DESIGNATOR ?? '').replace(/'/g, "\\'");
+    const diasAberto   = (a.dias_aberto ?? '').toString();
+    const dataAbertura = a.DATA_ABERTURA ? new Date(a.DATA_ABERTURA).toISOString().slice(0, 10) : '';
     const ofensorCls = Number(a.dias_abertos) >= 4 ? 'linha-ofensor' : '';
     return `
       <tr class="${ofensorCls}">
         <td class="td-center">
           <button class="btn-gerenciar btn-gerenciado" title="Ver e enviar gerenciamento"
-            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}','${designator}','${tempoFil}')">✓ Gerenciado</button>
+            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}','${designator}','${diasAberto}','${dataAbertura}')">✓ Gerenciado</button>
         </td>
         <td>${codSs || '—'}</td>
         <td>${a.CLUSTER_ ?? '—'}</td>
@@ -233,7 +234,7 @@ function renderAgenda(agenda) {
 
 // ── Modal Gerenciamento (anotação + histórico) ─────────────────────────────
 
-const anotacaoState = { codSs: '', designator: '', tempoFil: '' };
+const anotacaoState = { codSs: '', designator: '', diasAberto: '', dataAbertura: '' };
 
 // Popula o select de hora (06:00 às 22:00, de 30 em 30 min)
 (function popularHoras() {
@@ -317,10 +318,11 @@ async function carregarHistorico(codSs) {
   }
 }
 
-function abrirModalAnotacao(codSs, designator = '', tempoFil = '') {
+function abrirModalAnotacao(codSs, designator = '', diasAberto = '', dataAbertura = '') {
   anotacaoState.codSs = codSs;
   anotacaoState.designator = designator;
-  anotacaoState.tempoFil = tempoFil;
+  anotacaoState.diasAberto = diasAberto;
+  anotacaoState.dataAbertura = dataAbertura;
   const modal = document.getElementById('modal-anotacao');
   document.getElementById('anotacao-os-label').textContent = `OS: ${codSs}`;
   limparPrevisao();
@@ -353,8 +355,9 @@ async function salvarAnotacao(event) {
     previsao:    dataPrev ? `${dataPrev}T${horaPrev}` : null,
     status_prev: document.getElementById('anotacao-status').value,
     observacao:  document.getElementById('anotacao-obs').value || null,
-    designator:  anotacaoState.designator || null,
-    tempo_fil:   anotacaoState.tempoFil   || null
+    designator:    anotacaoState.designator   || null,
+    dias_aberto:   anotacaoState.diasAberto   !== '' ? Number(anotacaoState.diasAberto) : null,
+    data_abertura: anotacaoState.dataAbertura || null
   };
 
   try {

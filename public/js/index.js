@@ -521,8 +521,9 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
 
     body.innerHTML = ordenarPorGerenciamento(data.ordens, anotacoesMap).map(o => {
       const codSs = o.COD_SS ?? '';
-      const designator = (o.DESIGNATOR ?? '').replace(/'/g, "\\'");
-      const tempoFil = (o.TEMPO_FIL ?? '').toString().replace(/'/g, "\\'");
+      const designator   = (o.DESIGNATOR ?? '').replace(/'/g, "\\'");
+      const diasAberto   = (o.dias_aberto ?? '').toString();
+      const dataAbertura = o.DATA_ABERTURA ? new Date(o.DATA_ABERTURA).toISOString().slice(0, 10) : '';
       const anot = anotacoesMap[codSs];
       const temAnotacao = !!(anot && (anot.status_prev || anot.previsao || anot.observacao));
       const btnCls = temAnotacao ? 'btn-gerenciar btn-gerenciado' : 'btn-gerenciar';
@@ -533,7 +534,7 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
       <tr>
         <td class="td-center">
           <button class="${btnCls}" title="${btnTitle.replace(/"/g, '&quot;')}"
-            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}','${designator}','${tempoFil}')">
+            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}','${designator}','${diasAberto}','${dataAbertura}')">
             ${temAnotacao ? '✓ Gerenciado' : 'Gerenciar'}
           </button>
         </td>
@@ -625,8 +626,9 @@ async function carregarOrdensTecnicaModal(url) {
 
     body.innerHTML = ordenarPorGerenciamento(data.ordens, anotacoesMap).map(o => {
       const codSs = o.COD_SS ?? '';
-      const designator = (o.DESIGNATOR ?? '').replace(/'/g, "\\'");
-      const tempoFil = (o.TEMPO_FIL ?? '').toString().replace(/'/g, "\\'");
+      const designator   = (o.DESIGNATOR ?? '').replace(/'/g, "\\'");
+      const diasAberto   = (o.dias_aberto ?? '').toString();
+      const dataAbertura = o.DATA_ABERTURA ? new Date(o.DATA_ABERTURA).toISOString().slice(0, 10) : '';
       const anot = anotacoesMap[codSs];
       const temAnotacao = !!(anot && (anot.status_prev || anot.previsao || anot.observacao));
       const btnCls = temAnotacao ? 'btn-gerenciar btn-gerenciado' : 'btn-gerenciar';
@@ -637,7 +639,7 @@ async function carregarOrdensTecnicaModal(url) {
       <tr>
         <td class="td-center">
           <button class="${btnCls}" title="${btnTitle.replace(/"/g, '&quot;')}"
-            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}','${designator}','${tempoFil}')">
+            onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}','${designator}','${diasAberto}','${dataAbertura}')">
             ${temAnotacao ? '✓ Gerenciado' : 'Gerenciar'}
           </button>
         </td>
@@ -700,7 +702,7 @@ function abrirModalPainel(faixaKey, clusterEnc = '', gerenciado = '') {
 
 // ── Modal Gerenciamento (anotação + histórico) ────────────────────────────
 
-const anotacaoState = { codSs: '', designator: '', tempoFil: '' };
+const anotacaoState = { codSs: '', designator: '', diasAberto: '', dataAbertura: '' };
 
 // Popula o select de hora (06:00 às 22:00, de 30 em 30 min)
 (function popularHoras() {
@@ -784,10 +786,11 @@ async function carregarHistorico(codSs) {
   }
 }
 
-function abrirModalAnotacao(codSs, designator = '', tempoFil = '') {
+function abrirModalAnotacao(codSs, designator = '', diasAberto = '', dataAbertura = '') {
   anotacaoState.codSs = codSs;
   anotacaoState.designator = designator;
-  anotacaoState.tempoFil = tempoFil;
+  anotacaoState.diasAberto = diasAberto;
+  anotacaoState.dataAbertura = dataAbertura;
   const modal = document.getElementById('modal-anotacao');
   document.getElementById('anotacao-os-label').textContent = `OS: ${codSs}`;
   limparPrevisao();
@@ -820,8 +823,9 @@ async function salvarAnotacao(event) {
     previsao: dataPrev ? `${dataPrev}T${horaPrev}` : null,
     status_prev: document.getElementById('anotacao-status').value,
     observacao: document.getElementById('anotacao-obs').value || null,
-    designator: anotacaoState.designator || null,
-    tempo_fil:  anotacaoState.tempoFil   || null
+    designator:    anotacaoState.designator   || null,
+    dias_aberto:   anotacaoState.diasAberto   !== '' ? Number(anotacaoState.diasAberto) : null,
+    data_abertura: anotacaoState.dataAbertura || null
   };
 
   try {

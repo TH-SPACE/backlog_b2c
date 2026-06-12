@@ -1,14 +1,31 @@
 const pool = require('../config/database');
 
+// Coluna DESIGNATOR detectada dinamicamente no startup (nome pode variar)
+let COL_DESIGNATOR = null;
+
 // Garante a tabela de anotações ao iniciar
 (async () => {
   try {
+    // Detecta nomes reais das colunas em backlog_elos (evita erro "Unknown column")
+    try {
+      const [cols] = await pool.query('SHOW COLUMNS FROM backlog_elos');
+      const names = new Set(cols.map(c => c.Field.toUpperCase()));
+      for (const c of ['DESIGNATOR', 'DESIGNADOR']) {
+        if (names.has(c)) { COL_DESIGNATOR = c; break; }
+      }
+      if (COL_DESIGNATOR) console.log(`[backlog_elos] coluna designator detectada: ${COL_DESIGNATOR}`);
+      else                console.warn('[backlog_elos] coluna designator NÃO encontrada — será salva como null');
+    } catch (e) {
+      console.error('[backlog_elos] Aviso: não foi possível detectar colunas extras:', e.message);
+    }
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS backlog_anotacoes (
         id             INT AUTO_INCREMENT PRIMARY KEY,
         cod_ss         VARCHAR(100) NOT NULL,
         designator     VARCHAR(200) NULL,
-        tempo_fil      VARCHAR(100) NULL,
+        dias_aberto    INT          NULL,
+        data_abertura  DATETIME     NULL,
         previsao       DATETIME     NULL,
         status_prev    VARCHAR(100) NOT NULL DEFAULT '',
         observacao     TEXT         NULL,
@@ -23,7 +40,8 @@ const pool = require('../config/database');
         id             INT AUTO_INCREMENT PRIMARY KEY,
         cod_ss         VARCHAR(100) NOT NULL,
         designator     VARCHAR(200) NULL,
-        tempo_fil      VARCHAR(100) NULL,
+        dias_aberto    INT          NULL,
+        data_abertura  DATETIME     NULL,
         previsao       DATETIME     NULL,
         status_prev    VARCHAR(100) NOT NULL DEFAULT '',
         observacao     TEXT         NULL,
@@ -31,14 +49,22 @@ const pool = require('../config/database');
         INDEX idx_hist_cod_ss (cod_ss)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    // Migração: adiciona coluna nas tabelas que já existiam sem ela
+    // Migração: garante colunas nas tabelas que já existiam
     for (const tabela of ['backlog_anotacoes', 'backlog_anotacoes_historico']) {
       try {
         await pool.query(`ALTER TABLE ${tabela} ADD COLUMN IF NOT EXISTS designator VARCHAR(200) NULL AFTER cod_ss`);
-      } catch (_) { /* ignora */ }
+      } catch (_) {}
+      // Renomeia tempo_fil → dias_aberto se ainda existir; caso contrário adiciona dias_aberto
       try {
-        await pool.query(`ALTER TABLE ${tabela} ADD COLUMN IF NOT EXISTS tempo_fil VARCHAR(100) NULL AFTER designator`);
-      } catch (_) { /* ignora */ }
+        await pool.query(`ALTER TABLE ${tabela} CHANGE COLUMN tempo_fil dias_aberto INT NULL`);
+      } catch (_) {
+        try {
+          await pool.query(`ALTER TABLE ${tabela} ADD COLUMN IF NOT EXISTS dias_aberto INT NULL AFTER designator`);
+        } catch (_) {}
+      }
+      try {
+        await pool.query(`ALTER TABLE ${tabela} ADD COLUMN IF NOT EXISTS data_abertura DATETIME NULL AFTER dias_aberto`);
+      } catch (_) {}
     }
   } catch (e) {
     console.error('[backlog_anotacoes] Erro ao criar tabela:', e.message);
@@ -68,6 +94,15 @@ class BacklogModel {
     ];
   }
 
+  // Retorna fragmento SQL com DESIGNATOR (coluna real detectada) e TEMPO_FIL (dias na fila,
+  // calculado como DATEDIFF entre DATA_STATUS e agora — capturado no momento do gerenciamento)
+  _extraColsSQL(alias = '') {
+    const p = alias ? `${alias}.` : '';
+    const d = COL_DESIGNATOR ? `${p}${COL_DESIGNATOR} AS DESIGNATOR` : 'NULL AS DESIGNATOR';
+    const dias = `DATEDIFF(NOW(), ${p}DATA_ABERTURA) AS dias_aberto`;
+    return `, ${d}, ${dias}`;
+  }
+
   // Join com anotação preenchida = OS gerenciada (índice único por cod_ss, não duplica linhas)
   _joinAnotacaoPreenchida() {
     return `
@@ -78,7 +113,7 @@ class BacklogModel {
   }
 
   _getFaixaPendenciaCondition(faixaKey) {
-    const expr = 'DATEDIFF(NOW(), e.DATA_STATUS)';
+    const expr = 'DATEDIFF(NOW(), e.DATA_ABERTURA)';
     const mapa = {
       total: '1=1',
       f0_2: `${expr} <= 2`,
@@ -111,7 +146,7 @@ class BacklogModel {
     // Qualifica as colunas com "e." por causa do join (cod_ss existe nas duas tabelas)
     const colunas = opcoes.todasColunas
       ? 'e.*'
-      : COLUNAS_MODAL.split(', ').map(c => `e.${c}`).join(', ');
+      : `${COLUNAS_MODAL.split(', ').map(c => `e.${c}`).join(', ')}${this._extraColsSQL('e')}`;
 
     const query = `
       SELECT ${colunas},
@@ -326,7 +361,7 @@ class BacklogModel {
     if (where) conds.push(where.replace(/^WHERE\s+/i, ''));
     conds.push(...this._condicoesTecnica());
     const whereTec = `WHERE ${conds.join(' AND ')}`;
-    const dias = 'DATEDIFF(NOW(), e.DATA_STATUS)';
+    const dias = 'DATEDIFF(NOW(), e.DATA_ABERTURA)';
     const joinAnot = this._joinAnotacaoPreenchida();
     const faixas = `
       SUM(CASE WHEN ${dias} <= 2 THEN 1 ELSE 0 END) AS faixa_0_2,
@@ -422,7 +457,7 @@ class BacklogModel {
     conds.push('CLUSTER_ = ?');
     conds.push(faixaCondition);
 
-    const colunas = opcoes.todasColunas ? '*' : COLUNAS_MODAL;
+    const colunas = opcoes.todasColunas ? '*' : `${COLUNAS_MODAL}${this._extraColsSQL()}`;
     const query = `
       SELECT
         ${colunas},
@@ -469,6 +504,7 @@ class BacklogModel {
         e.STATUS,
         e.DATA_ABERTURA,
         DATEDIFF(NOW(), e.DATA_ABERTURA) AS dias_abertos
+        ${this._extraColsSQL('e')}
       FROM backlog_anotacoes a
       INNER JOIN backlog_elos e ON e.COD_SS = a.cod_ss COLLATE utf8mb4_general_ci
       WHERE ${conds.join(' AND ')}
@@ -500,7 +536,7 @@ class BacklogModel {
       baseParams.push(String(causa).toUpperCase());
     }
 
-    const colunas = opcoes.todasColunas ? '*' : `${COLUNAS_MODAL}, DATA_STATUS`;
+    const colunas = opcoes.todasColunas ? '*' : `${COLUNAS_MODAL}, DATA_STATUS${this._extraColsSQL()}`;
     const query = `
       SELECT ${colunas},
         DATEDIFF(NOW(), DATA_ABERTURA) AS dias_abertos,
@@ -529,22 +565,23 @@ class BacklogModel {
     return mapa;
   }
 
-  async upsertAnotacao(codSs, { previsao, status_prev, observacao, designator, tempo_fil }) {
+  async upsertAnotacao(codSs, { previsao, status_prev, observacao, designator, dias_aberto, data_abertura }) {
     const valores = [
       String(codSs),
-      designator || null,
-      tempo_fil  || null,
-      previsao   || null,
+      designator    || null,
+      dias_aberto != null ? Number(dias_aberto) : null,
+      data_abertura || null,
+      previsao      || null,
       String(status_prev || ''),
-      observacao || null
+      observacao    || null
     ];
-    // Mantém o snapshot atual (backlog_anotacoes) e registra no histórico
     await pool.query(
-      `INSERT INTO backlog_anotacoes (cod_ss, designator, tempo_fil, previsao, status_prev, observacao)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO backlog_anotacoes (cod_ss, designator, dias_aberto, data_abertura, previsao, status_prev, observacao)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          designator    = VALUES(designator),
-         tempo_fil     = VALUES(tempo_fil),
+         dias_aberto   = VALUES(dias_aberto),
+         data_abertura = VALUES(data_abertura),
          previsao      = VALUES(previsao),
          status_prev   = VALUES(status_prev),
          observacao    = VALUES(observacao),
@@ -552,8 +589,8 @@ class BacklogModel {
       valores
     );
     await pool.query(
-      `INSERT INTO backlog_anotacoes_historico (cod_ss, designator, tempo_fil, previsao, status_prev, observacao)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO backlog_anotacoes_historico (cod_ss, designator, dias_aberto, data_abertura, previsao, status_prev, observacao)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       valores
     );
   }
