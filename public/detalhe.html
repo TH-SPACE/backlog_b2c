@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Backlog BDs – Detalhe Cluster</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-content">
+      <div class="header-left">
+        <a href="/" class="btn-voltar">← Voltar</a>
+        <h1>📋 Cluster: <span class="cluster-nome" id="cluster-nome">—</span></h1>
+      </div>
+      <div class="header-right">
+        <span class="atualizado">Atualizado em: <strong id="atualizado-em">—</strong></span>
+        <button onclick="carregarDetalhe()" class="btn-refresh">↻ Atualizar</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <section class="cards-resumo">
+      <div class="card card-total">
+        <div class="card-icon">📦</div>
+        <div class="card-info">
+          <span class="card-label">Total neste Cluster</span>
+          <span class="card-value" id="total-cluster">—</span>
+        </div>
+      </div>
+      <div class="card card-ofensor">
+        <div class="card-icon">🚨</div>
+        <div class="card-info">
+          <span class="card-label">Ofensores (&gt;4 dias)</span>
+          <span class="card-value" id="ofensores-cluster">—</span>
+        </div>
+      </div>
+      <div class="card card-ok">
+        <div class="card-icon">✅</div>
+        <div class="card-info">
+          <span class="card-label">Dentro do Prazo</span>
+          <span class="card-value" id="ok-cluster">—</span>
+        </div>
+      </div>
+    </section>
+
+    <div id="estado-msg" class="estado-msg"></div>
+
+    <section class="section-cluster">
+      <h2 class="section-title">Reparos do Cluster: <strong id="titulo-cluster">—</strong></h2>
+      <div class="table-wrapper">
+        <table class="tabela-cluster" id="tabela-detalhe">
+          <thead id="thead-detalhe">
+            <tr><th>Carregando...</th></tr>
+          </thead>
+          <tbody id="tbody-detalhe">
+            <tr><td class="td-loading">Carregando dados...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>Sistema de Backlog BDs &copy; <span id="ano"></span> — Banco: <strong>indicadores</strong> / Tabela: <strong>backlog_elos</strong></p>
+  </footer>
+
+  <script src="/js/detalhe.js"></script>
+</body>
+</html>

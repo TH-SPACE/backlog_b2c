@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Backlog BDs – Agenda do Dia</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-content">
+      <div class="header-left">
+        <img src="/svg/vivo-homem-ferramentas-320x320.svg" alt="" class="header-logo" />
+        <div>
+          <h1>Backlog BDs</h1>
+          <span class="subtitle">Tratativa de Reparos</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <nav class="header-nav">
+          <a href="/" class="nav-link">📋 Dashboard</a>
+          <a href="/agenda.html" class="nav-link nav-link-active">📅 Agenda do Dia</a>
+        </nav>
+        <button onclick="carregarAgenda()" class="btn-refresh">↻ Atualizar</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Barra de Filtros -->
+    <section class="filtros-bar">
+      <div class="filtro-grupo">
+        <label class="filtro-label">🗺️ Regional</label>
+        <div class="dropdown-check" id="dropdown-regional">
+          <button class="dropdown-check-btn" id="btn-regional" type="button" onclick="toggleDropdown('regional')">
+            <span id="regional-label">Carregando...</span>
+            <span class="dropdown-arrow">▾</span>
+          </button>
+          <div class="dropdown-check-menu" id="menu-regional">
+            <div class="dropdown-check-actions">
+              <button type="button" onclick="selecionarTodos('regional')">Todos</button>
+              <button type="button" onclick="limparTodos('regional')">Limpar</button>
+            </div>
+            <div class="dropdown-check-list" id="list-regional"></div>
+          </div>
+        </div>
+      </div>
+      <div class="filtro-grupo">
+        <label class="filtro-label">🔌 Tecnologia</label>
+        <div class="dropdown-check" id="dropdown-tecnologia">
+          <button class="dropdown-check-btn" id="btn-tecnologia" type="button" onclick="toggleDropdown('tecnologia')">
+            <span id="tecnologia-label">Carregando...</span>
+            <span class="dropdown-arrow">▾</span>
+          </button>
+          <div class="dropdown-check-menu" id="menu-tecnologia">
+            <div class="dropdown-check-actions">
+              <button type="button" onclick="selecionarTodos('tecnologia')">Todos</button>
+              <button type="button" onclick="limparTodos('tecnologia')">Limpar</button>
+            </div>
+            <div class="dropdown-check-list" id="list-tecnologia"></div>
+          </div>
+        </div>
+      </div>
+      <div class="filtro-grupo">
+        <label class="filtro-label">📅 Exibir</label>
+        <div class="dropdown-check" id="dropdown-periodo">
+          <button class="dropdown-check-btn" id="btn-periodo" type="button" onclick="toggleDropdown('periodo')">
+            <span id="periodo-label">Hoje</span>
+            <span class="dropdown-arrow">▾</span>
+          </button>
+          <div class="dropdown-check-menu" id="menu-periodo">
+            <div class="dropdown-check-list">
+              <label class="check-item"><input type="radio" name="periodo" value="hoje" checked onchange="onPeriodoChange(this.value)"/><span>Hoje</span></label>
+              <label class="check-item"><input type="radio" name="periodo" value="amanha" onchange="onPeriodoChange(this.value)"/><span>Amanhã</span></label>
+              <label class="check-item"><input type="radio" name="periodo" value="semana" onchange="onPeriodoChange(this.value)"/><span>Próximos 7 dias</span></label>
+              <label class="check-item"><input type="radio" name="periodo" value="todos" onchange="onPeriodoChange(this.value)"/><span>Todos com previsão</span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="btn-limpar-filtros" onclick="limparFiltros()">✕ Limpar</button>
+    </section>
+
+    <!-- Cards de resumo -->
+    <section class="cards-resumo" id="cards-agenda">
+      <div class="card card-total">
+        <div class="card-icon"><img src="/svg/vivo-formulario-folha-lapis-purpura-esquerda-320x320.svg" class="svg-icon" alt="" /></div>
+        <div class="card-info">
+          <span class="card-label">Total na Agenda</span>
+          <span class="card-value" id="agenda-total">—</span>
+        </div>
+      </div>
+      <div class="card card-ok">
+        <div class="card-icon"><img src="/svg/vivo-vivinho-check-purpura-centro-320x320.svg" class="svg-icon" alt="" /></div>
+        <div class="card-info">
+          <span class="card-label">Agendado / Em Andamento</span>
+          <span class="card-value" id="agenda-em-andamento">—</span>
+        </div>
+      </div>
+      <div class="card card-ofensor">
+        <div class="card-icon"><img src="/svg/vivo-velocimetro-brilho-rosa-centro-320x320.svg" class="svg-icon" alt="" /></div>
+        <div class="card-info">
+          <span class="card-label">Impedido / Aguardando</span>
+          <span class="card-value" id="agenda-impedido">—</span>
+        </div>
+      </div>
+      <div class="card card-media">
+        <div class="card-icon"><img src="/svg/vivo-chat-duvida-cinza-centro-320x320.svg" class="svg-icon" alt="" /></div>
+        <div class="card-info">
+          <span class="card-label">Sem Status Definido</span>
+          <span class="card-value" id="agenda-sem-status">—</span>
+        </div>
+      </div>
+    </section>
+
+    <div id="estado-msg" class="estado-msg"></div>
+
+    <!-- Tabela de Agenda -->
+    <section class="section-cluster section-agenda">
+      <h2 class="section-title" id="agenda-titulo-secao">📅 Agenda do Dia</h2>
+      <p class="agenda-desc" id="agenda-data-label"></p>
+      <div class="table-wrapper">
+        <table class="tabela-cluster">
+          <thead>
+            <tr>
+              <th>Gerenciar</th>
+              <th>OS</th>
+              <th>Cluster</th>
+              <th>Regional</th>
+              <th>Previsão</th>
+              <th>Status Gestão</th>
+              <th>Status OS</th>
+              <th>Dias Abertos</th>
+              <th>Observação</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-agenda">
+            <tr><td colspan="9" class="td-loading">Carregando agenda...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Sub-modal de Anotação -->
+  <div id="modal-anotacao" class="modal-overlay hidden" onclick="fecharModalAnotacao(event)">
+    <div class="modal-box modal-box-sm" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Anotação</h3>
+        <button class="modal-close" onclick="fecharModalAnotacao()">✕</button>
+      </div>
+      <div class="modal-subtitulo" id="anotacao-os-label"></div>
+      <form id="form-anotacao" onsubmit="salvarAnotacao(event)">
+        <div class="form-group">
+          <label class="form-label">Previsão de conclusão</label>
+          <input type="datetime-local" id="anotacao-previsao" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select id="anotacao-status" class="form-input">
+            <option value="">— Selecione —</option>
+            <option value="EM ANDAMENTO">Em Andamento</option>
+            <option value="AGENDADO">Agendado</option>
+            <option value="AGUARDANDO MATERIAL">Aguardando Material</option>
+            <option value="AGUARDANDO CLIENTE">Aguardando Cliente</option>
+            <option value="AGUARDANDO PARCEIRO">Aguardando Parceiro/Contratada</option>
+            <option value="AGUARDANDO APROVACAO">Aguardando Aprovação</option>
+            <option value="IMPEDIDO">Impedido</option>
+            <option value="REPASSADO">Repassado</option>
+            <option value="RESOLVIDO">Resolvido</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observação</label>
+          <textarea id="anotacao-obs" class="form-input form-textarea" rows="3" placeholder="Descreva a situação..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-limpar-filtros" onclick="fecharModalAnotacao()">Cancelar</button>
+          <button type="submit" class="btn-aplicar" id="btn-salvar-anotacao">💾 Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>Sistema de Backlog BDs &copy; <span id="ano"></span> — Banco: <strong>indicadores</strong> / Tabela: <strong>backlog_elos</strong> — Responsável: <strong>Thiago Alves Nunes</strong></p>
+  </footer>
+
+  <script src="/js/agenda.js"></script>
+</body>
+</html>

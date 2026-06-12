@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Backlog BDs – Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-content">
+      <div class="header-left">
+        <img src="/svg/vivo-homem-ferramentas-320x320.svg" alt="" class="header-logo" />
+        <div>
+          <h1>Backlog BDs</h1>
+          <span class="subtitle">Tratativa de Reparos</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <nav class="header-nav">
+          <a href="/" class="nav-link nav-link-active">📋 Dashboard</a>
+          <a href="/agenda.html" class="nav-link">📅 Agenda do Dia</a>
+        </nav>
+        <span class="atualizado">Atualizado em: <strong id="atualizado-em">—</strong></span>
+        <button onclick="carregarDados()" class="btn-refresh">↻ Atualizar</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Barra de Filtros -->
+    <section class="filtros-bar">
+      <div class="filtro-grupo">
+        <label class="filtro-label">🗺️ Regional</label>
+        <div class="dropdown-check" id="dropdown-regional">
+          <button class="dropdown-check-btn" id="btn-regional" type="button" onclick="toggleDropdown('regional')">
+            <span id="regional-label">Carregando...</span>
+            <span class="dropdown-arrow">▾</span>
+          </button>
+          <div class="dropdown-check-menu" id="menu-regional">
+            <div class="dropdown-check-actions">
+              <button type="button" onclick="selecionarTodos('regional')">Todos</button>
+              <button type="button" onclick="limparTodos('regional')">Limpar</button>
+            </div>
+            <div class="dropdown-check-list" id="list-regional"></div>
+          </div>
+        </div>
+      </div>
+      <div class="filtro-grupo">
+        <label class="filtro-label">🔌 Tecnologia</label>
+        <div class="dropdown-check" id="dropdown-tecnologia">
+          <button class="dropdown-check-btn" id="btn-tecnologia" type="button" onclick="toggleDropdown('tecnologia')">
+            <span id="tecnologia-label">Carregando...</span>
+            <span class="dropdown-arrow">▾</span>
+          </button>
+          <div class="dropdown-check-menu" id="menu-tecnologia">
+            <div class="dropdown-check-actions">
+              <button type="button" onclick="selecionarTodos('tecnologia')">Todos</button>
+              <button type="button" onclick="limparTodos('tecnologia')">Limpar</button>
+            </div>
+            <div class="dropdown-check-list" id="list-tecnologia"></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn-limpar-filtros" onclick="limparFiltros()">✕ Limpar</button>
+      <button class="btn-export" onclick="baixarExcelGeral()">📥 Exportar Excel</button>
+    </section>
+
+    <!-- Cards de resumo -->
+    <section class="cards-resumo" id="cards-resumo">
+      <div class="card card-total">
+        <div class="card-icon"><img src="/svg/vivo-devolucao-equipamento-purpura-320x320.svg" class="svg-icon" alt="" /></div>
+        <div class="card-info">
+          <span class="card-label">Total de Reparos</span>
+          <span class="card-value" id="total-geral">—</span>
+        </div>
+      </div>
+      <div class="card card-ofensor">
+        <div class="card-icon"><img src="/svg/vivo-velocimetro-brilho-rosa-centro-320x320.svg" class="svg-icon" alt="" /></div>
+        <div class="card-info">
+          <span class="card-label">Ofensores (&gt;4 dias)</span>
+          <span class="card-value" id="total-ofensores">—</span>
+        </div>
+      </div>
+      <div class="card card-ok">
+        <div class="card-icon"><img src="/svg/vivo-vivinho-check-purpura-centro-320x320.svg" class="svg-icon" alt="" /></div>
+        <div class="card-info">
+          <span class="card-label">Dentro do Prazo (≤4 dias)</span>
+          <span class="card-value" id="total-dentro-prazo">—</span>
+        </div>
+      </div>
+      <div class="card card-media">
+        <div class="card-icon"><img src="/svg/vivo-foguete-diagonal-rosa-centro-320x320.svg" class="svg-icon" alt="" /></div>
+        <div class="card-info">
+          <span class="card-label">Média de Dias em Aberto</span>
+          <span class="card-value" id="media-dias">—</span>
+        </div>
+      </div>
+      <div class="card card-cluster">
+        <div class="card-icon"><img src="/svg/vivo-mapa-purpura-centro-320x320.svg" class="svg-icon" alt="" /></div>
+        <div class="card-info">
+          <span class="card-label">Clusters Ativos</span>
+          <span class="card-value" id="total-clusters">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Estado de carregamento / erro -->
+    <div id="estado-msg" class="estado-msg"></div>
+
+    <!-- Tabela por Cluster -->
+    <section class="section-cluster">
+      <h2 class="section-title"><img src="/svg/vivo-computador-velocidade-purpura-centro-320x320.svg" class="svg-title-icon" alt="" /> Backlog por Cluster</h2>
+      <div class="legenda">
+        <span class="badge badge-ofensor">🚨 Ofensor: &gt; 4 dias</span>
+        <span class="badge badge-ok">✅ Dentro do prazo: ≤ 4 dias</span>
+      </div>
+      <div class="table-wrapper">
+        <table class="tabela-cluster">
+          <thead>
+            <tr>
+              <th>Cluster</th>
+              <th>Total</th>
+              <th>Hoje</th>
+              <th>1 dia</th>
+              <th>2 dias</th>
+              <th>3 dias</th>
+              <th>4 dias</th>
+              <th>5-7 dias</th>
+              <th>8-15 dias</th>
+              <th>Acima de 15 dias</th>
+              <th>Ofensores (&gt;4 dias)</th>
+              <th>% Ofensores</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-cluster">
+            <tr><td colspan="12" class="td-loading">Carregando dados...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section-cluster section-tecnica">
+      <h2 class="section-title"><img src="/svg/vivo-ferramentas-engrenagem-purpura-centro-320x320.svg" class="svg-title-icon" alt="" /> Pendências Técnicas (Status: Pendente)</h2>
+      <div class="filtros-tecnica">
+        <div class="filtro-grupo">
+          <label class="filtro-label">🗂️ Cluster (somente pendência técnica)</label>
+          <div class="dropdown-check" id="dropdown-clusterTecnica">
+            <button class="dropdown-check-btn" id="btn-clusterTecnica" type="button" onclick="toggleDropdown('clusterTecnica')">
+              <span id="clusterTecnica-label">Todas</span>
+              <span class="dropdown-arrow">▾</span>
+            </button>
+            <div class="dropdown-check-menu" id="menu-clusterTecnica">
+              <div class="dropdown-check-actions">
+                <button type="button" onclick="selecionarTodos('clusterTecnica')">Todos</button>
+                <button type="button" onclick="limparTodos('clusterTecnica')">Limpar</button>
+              </div>
+              <div class="dropdown-check-list" id="list-clusterTecnica"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cards-tecnica">
+        <div class="card-tecnica">
+          <span class="card-tecnica-label">Total Pendências Técnicas</span>
+          <span class="card-tecnica-value" id="tec-total">—</span>
+        </div>
+        <div class="card-tecnica">
+          <span class="card-tecnica-label">Status Reason: TECNICA</span>
+          <span class="card-tecnica-value" id="tec-tecnica">—</span>
+        </div>
+        <div class="card-tecnica">
+          <span class="card-tecnica-label">Status Reason: TECNICA + CABEAMENTO</span>
+          <span class="card-tecnica-value" id="tec-cabeamento">—</span>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table class="tabela-cluster tabela-tecnica">
+          <thead>
+            <tr>
+              <th>Causa (NOTDONEREASON)</th>
+              <th>Tecnica</th>
+              <th>Tecnica + Cabeamento</th>
+              <th>Total</th>
+              <th>% do Total Técnico</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-tecnica">
+            <tr><td colspan="5" class="td-loading">Carregando pendências técnicas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="modal-ordens" class="modal-overlay hidden" onclick="fecharModalOrdens(event)">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-titulo">Ordens de Reparo</h3>
+        <div class="modal-actions">
+          <button class="btn-export" onclick="baixarExcelModal()">Baixar Excel</button>
+          <button class="modal-close" onclick="fecharModalOrdens()">✕</button>
+        </div>
+      </div>
+      <div id="modal-subtitulo" class="modal-subtitulo"></div>
+      <div class="table-wrapper modal-table-wrap">
+        <table class="tabela-cluster modal-table">
+          <thead>
+            <tr>
+              <th>Gerenciar</th>
+              <th>OS</th>
+              <th>Cluster</th>
+              <th>Regional</th>
+              <th>Status</th>
+              <th>Data Abertura</th>
+              <th>Dias Abertos</th>
+            </tr>
+          </thead>
+          <tbody id="modal-ordens-body">
+            <tr><td colspan="7" class="td-loading">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sub-modal de Anotação -->
+  <div id="modal-anotacao" class="modal-overlay hidden" onclick="fecharModalAnotacao(event)">
+    <div class="modal-box modal-box-sm" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="anotacao-titulo">Anotação</h3>
+        <button class="modal-close" onclick="fecharModalAnotacao()">✕</button>
+      </div>
+      <div class="modal-subtitulo" id="anotacao-os-label"></div>
+      <form id="form-anotacao" onsubmit="salvarAnotacao(event)">
+        <div class="form-group">
+          <label class="form-label">Previsão de conclusão</label>
+          <input type="datetime-local" id="anotacao-previsao" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select id="anotacao-status" class="form-input">
+            <option value="">— Selecione —</option>
+            <option value="EM ANDAMENTO">Em Andamento</option>
+            <option value="AGENDADO">Agendado</option>
+            <option value="AGUARDANDO MATERIAL">Aguardando Material</option>
+            <option value="AGUARDANDO CLIENTE">Aguardando Cliente</option>
+            <option value="AGUARDANDO PARCEIRO">Aguardando Parceiro/Contratada</option>
+            <option value="AGUARDANDO APROVACAO">Aguardando Aprovação</option>
+            <option value="IMPEDIDO">Impedido</option>
+            <option value="REPASSADO">Repassado</option>
+            <option value="RESOLVIDO">Resolvido</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observação</label>
+          <textarea id="anotacao-obs" class="form-input form-textarea" rows="3" placeholder="Descreva a situação..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-limpar-filtros" onclick="fecharModalAnotacao()">Cancelar</button>
+          <button type="submit" class="btn-aplicar" id="btn-salvar-anotacao">💾 Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>Sistema de Backlog BDs &copy; <span id="ano"></span> — Banco: <strong>indicadores</strong> / Tabela: <strong>backlog_elos</strong> — Responsável: <strong>Thiago Alves Nunes</strong></p>
+  </footer>
+
+  <script src="/js/index.js"></script>
+</body>
+</html>

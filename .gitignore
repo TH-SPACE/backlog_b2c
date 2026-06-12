@@ -1,0 +1,12 @@
+# Credenciais — nunca commitar
+.env
+
+# Configuração local do Claude Code
+.claude/
+
+# Dependências
+node_modules/
+
+# Logs e temporários
+*.log
+npm-debug.log*
