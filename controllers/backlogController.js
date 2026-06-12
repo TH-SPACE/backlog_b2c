@@ -137,6 +137,20 @@ class BacklogController {
     }
   }
 
+  async apiPainelTecnica(req, res) {
+    try {
+      const filtros = parseFiltros(req.query);
+      const painel = await backlogModel.getPainelTecnica(filtros);
+      res.json({
+        ...painel,
+        atualizadoEm: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+      });
+    } catch (err) {
+      console.error('Erro ao carregar painel técnica:', err);
+      res.status(500).json({ erro: err.message });
+    }
+  }
+
   async apiOrdensTecnicas(req, res) {
     try {
       const { causa, statusReason } = req.query;
@@ -218,6 +232,16 @@ class BacklogController {
         : [];
       const mapa = await backlogModel.getAnotacoesBatch(lista);
       res.json(mapa);
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  }
+
+  async apiHistoricoAnotacoes(req, res) {
+    try {
+      const { codSs } = req.params;
+      const historico = await backlogModel.getHistoricoAnotacoes(codSs);
+      res.json({ historico });
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }

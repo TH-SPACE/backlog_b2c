@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portal – Sistemas B2C</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-content">
+      <div class="header-left">
+        <img src="/svg/vivo-empresas-predios-purpura-esquerda-320x320.svg" alt="" class="header-logo" />
+        <div>
+          <h1>Portal de Sistemas</h1>
+          <span class="subtitle">Acesso rápido às ferramentas B2C</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container portal-container">
+
+    <section class="portal-grid">
+
+      <a href="http://10.243.20.64:8088/" class="portal-card">
+        <img src="/svg/vivo-conectividade-wifi-purpura-centro-320x320.svg" class="portal-icon" alt="" />
+        <span class="portal-titulo">Massivas</span>
+        <span class="portal-desc">Acompanhamento de eventos massivos da rede</span>
+        <span class="portal-link">Acessar →</span>
+      </a>
+
+      <a href="http://10.243.20.64:3050/" class="portal-card">
+        <img src="/svg/vivo-caminhao-modem-rosa-centro-320x320.svg" class="portal-icon" alt="" />
+        <span class="portal-titulo">Dias de Estoque</span>
+        <span class="portal-desc">Controle de dias de estoque de equipamentos</span>
+        <span class="portal-link">Acessar →</span>
+      </a>
+
+      <a href="/" class="portal-card">
+        <img src="/svg/vivo-homem-ferramentas-320x320.svg" class="portal-icon" alt="" />
+        <span class="portal-titulo">Backlog BDs</span>
+        <span class="portal-desc">Tratativa de reparos, pendências técnicas e agenda</span>
+        <span class="portal-link">Acessar →</span>
+      </a>
+
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>Portal de Sistemas B2C &copy; <span id="ano"></span> — Responsável: <strong>Thiago Alves Nunes</strong></p>
+  </footer>
+
+  <script>document.getElementById('ano').textContent = new Date().getFullYear();</script>
+</body>
+</html>

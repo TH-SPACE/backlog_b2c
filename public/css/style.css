@@ -101,6 +101,66 @@ body {
 }
 .btn-refresh:hover { background: rgba(255,255,255,.22); }
 
+/* ---- PORTAL ---- */
+.portal-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 180px);
+}
+
+.portal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 300px));
+  gap: 24px;
+  justify-content: center;
+  width: 100%;
+}
+
+.portal-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  background: var(--cor-card-bg);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+  box-shadow: var(--sombra);
+  padding: 32px 24px;
+  text-decoration: none;
+  color: var(--cor-texto);
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+
+.portal-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--sombra-md);
+  border-color: #660099;
+}
+
+.portal-icon {
+  width: 72px;
+  height: 72px;
+}
+
+.portal-titulo {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.portal-desc {
+  font-size: .82rem;
+  color: var(--cor-texto-suave);
+}
+
+.portal-link {
+  margin-top: 6px;
+  font-size: .85rem;
+  font-weight: 700;
+  color: #660099;
+}
+
 /* ---- NAV HEADER ---- */
 .header-nav {
   display: flex;
@@ -302,8 +362,230 @@ body {
   text-decoration: underline;
 }
 
+/* ---- MODAL GERENCIAMENTO (previsão + histórico) ---- */
+.hidden {
+  display: none !important;
+}
+
+.btn-gerenciar {
+  background: #660099;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: .74rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+}
+
+.btn-gerenciar:hover {
+  background: #4b0082;
+}
+
+.btn-gerenciado {
+  background: var(--cor-ok);
+}
+
+.btn-gerenciado:hover {
+  background: #15803d;
+}
+
+.historico-bloco-topo {
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0;
+  margin-bottom: 12px;
+}
+
+.prev-rapida {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chip-data {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--cor-texto);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+
+.chip-data:hover {
+  background: #ede9fe;
+  border-color: #660099;
+  color: #660099;
+}
+
+.chip-data-limpar {
+  color: var(--cor-texto-suave);
+}
+
+.prev-campos {
+  display: flex;
+  gap: 8px;
+}
+
+.prev-campos input[type="date"] {
+  flex: 1;
+}
+
+.prev-campos select {
+  width: 110px;
+}
+
+.historico-bloco {
+  margin-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+
+.historico-titulo {
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--cor-texto-suave);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  margin-bottom: 8px;
+}
+
+.historico-lista {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.historico-item {
+  background: #f8fafc;
+  border-left: 3px solid #660099;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 8px 10px;
+}
+
+.historico-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: .78rem;
+}
+
+.historico-quando {
+  color: var(--cor-texto-suave);
+  font-weight: 600;
+}
+
+.historico-status {
+  background: #ede9fe;
+  color: #660099;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 10px;
+}
+
+.historico-prev {
+  color: var(--cor-alerta);
+  font-weight: 600;
+}
+
+.historico-obs {
+  margin-top: 4px;
+  font-size: .8rem;
+  color: var(--cor-texto);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.historico-vazio {
+  font-size: .8rem;
+  color: var(--cor-texto-suave);
+  font-style: italic;
+}
+
+/* ---- VISÃO DE GESTÃO (Pendências Técnicas) ---- */
+.card-pt-ok { border-left: 4px solid var(--cor-ok); }
+.card-pt-alerta { border-left: 4px solid var(--cor-alerta); }
+.card-pt-critico { border-left: 4px solid var(--cor-ofensor); }
+
+.aging-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.aging-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--cor-card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--sombra);
+  padding: 18px 12px;
+  text-align: center;
+  border-top: 4px solid #94a3b8;
+}
+
+.aging-num {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.aging-label {
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--cor-texto-suave);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+
+.aging-pct {
+  font-size: .75rem;
+  color: var(--cor-texto-suave);
+}
+
+.aging-ok { border-top-color: var(--cor-ok); }
+.aging-ok .aging-num { color: var(--cor-ok); }
+
+.aging-alerta { border-top-color: var(--cor-alerta); }
+.aging-alerta .aging-num { color: var(--cor-alerta); }
+
+.aging-grave { border-top-color: #ea580c; }
+.aging-grave .aging-num { color: #ea580c; }
+
+.aging-critico { border-top-color: var(--cor-ofensor); }
+.aging-critico .aging-num { color: var(--cor-ofensor); }
+
 .tabela-tecnica td:first-child {
   max-width: 420px;
+}
+
+.td-anot-obs {
+  max-width: 260px;
+  white-space: normal;
+  word-break: break-word;
+  font-size: .8rem;
+  color: var(--cor-texto-suave);
+}
+
+.td-anot-status {
+  white-space: nowrap;
+  font-size: .8rem;
+}
+
+.td-anot-prev {
+  white-space: nowrap;
 }
 
 /* ---- BADGES LEGENDA ---- */

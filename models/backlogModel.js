@@ -16,13 +16,24 @@ const pool = require('../config/database');
         INDEX idx_cod_ss (cod_ss)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS backlog_anotacoes_historico (
+        id             INT AUTO_INCREMENT PRIMARY KEY,
+        cod_ss         VARCHAR(100) NOT NULL,
+        previsao       DATETIME     NULL,
+        status_prev    VARCHAR(100) NOT NULL DEFAULT '',
+        observacao     TEXT         NULL,
+        criado_em      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_hist_cod_ss (cod_ss)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
   } catch (e) {
     console.error('[backlog_anotacoes] Erro ao criar tabela:', e.message);
   }
 })();
 
 // Colunas usadas nos modais de ordens (evita SELECT * em listas grandes)
-const COLUNAS_MODAL = 'COD_SS, CLUSTER_, REGIONAL, STATUS, DATA_ABERTURA';
+const COLUNAS_MODAL = 'COD_SS, CLUSTER_, STATUS, STATUS_REASON, DATA_ABERTURA';
 
 class BacklogModel {
   // ÚNICO lugar que define o que é RETIRADO da base antes de exibir no painel.
@@ -237,6 +248,81 @@ class BacklogModel {
     };
   }
 
+  async getPainelTecnica(filtros = {}) {
+    const { where, params } = this._buildWhere(filtros);
+    const conds = [];
+    if (where) conds.push(where.replace(/^WHERE\s+/i, ''));
+    conds.push(...this._condicoesTecnica());
+    const whereTec = `WHERE ${conds.join(' AND ')}`;
+    const dias = 'DATEDIFF(NOW(), e.DATA_STATUS)';
+    // Anotação preenchida = OS gerenciada (índice único por cod_ss, não duplica linhas)
+    const joinAnot = `
+      LEFT JOIN backlog_anotacoes a
+        ON e.COD_SS = a.cod_ss COLLATE utf8mb4_general_ci
+       AND (COALESCE(a.status_prev, '') <> '' OR a.previsao IS NOT NULL OR COALESCE(a.observacao, '') <> '')
+    `;
+    const faixas = `
+      SUM(CASE WHEN ${dias} <= 2 THEN 1 ELSE 0 END) AS faixa_0_2,
+      SUM(CASE WHEN ${dias} BETWEEN 3 AND 5 THEN 1 ELSE 0 END) AS faixa_3_5,
+      SUM(CASE WHEN ${dias} BETWEEN 6 AND 10 THEN 1 ELSE 0 END) AS faixa_6_10,
+      SUM(CASE WHEN ${dias} > 10 THEN 1 ELSE 0 END) AS faixa_10_mais
+    `;
+
+    const resumoQuery = `
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN UPPER(TRIM(e.STATUS_REASON)) = 'TECNICA' THEN 1 ELSE 0 END) AS total_tecnica,
+        SUM(CASE WHEN UPPER(TRIM(e.STATUS_REASON)) = 'TECNICA + CABEAMENTO' THEN 1 ELSE 0 END) AS total_cabeamento,
+        SUM(CASE WHEN a.cod_ss IS NOT NULL THEN 1 ELSE 0 END) AS gerenciadas,
+        ROUND(AVG(${dias}), 1) AS media_dias,
+        MAX(${dias}) AS max_dias,
+        ${faixas}
+      FROM backlog_elos e
+      ${joinAnot}
+      ${whereTec}
+    `;
+
+    const clusterQuery = `
+      SELECT
+        e.CLUSTER_,
+        COUNT(*) AS total,
+        ${faixas},
+        SUM(CASE WHEN a.cod_ss IS NOT NULL THEN 1 ELSE 0 END) AS gerenciadas,
+        ROUND(AVG(${dias}), 1) AS media_dias
+      FROM backlog_elos e
+      ${joinAnot}
+      ${whereTec}
+      GROUP BY e.CLUSTER_
+      ORDER BY total DESC, e.CLUSTER_ ASC
+    `;
+
+    const causasQuery = `
+      SELECT
+        COALESCE(NULLIF(TRIM(e.NOTDONEREASON), ''), 'SEM INFORMACAO') AS causa,
+        COUNT(*) AS total,
+        ROUND(AVG(${dias}), 1) AS media_dias,
+        SUM(CASE WHEN a.cod_ss IS NOT NULL THEN 1 ELSE 0 END) AS gerenciadas
+      FROM backlog_elos e
+      ${joinAnot}
+      ${whereTec}
+      GROUP BY COALESCE(NULLIF(TRIM(e.NOTDONEREASON), ''), 'SEM INFORMACAO')
+      ORDER BY total DESC, causa ASC
+      LIMIT 30
+    `;
+
+    const [[resumoRows], [clusterRows], [causasRows]] = await Promise.all([
+      pool.query(resumoQuery, params),
+      pool.query(clusterQuery, params),
+      pool.query(causasQuery, params)
+    ]);
+
+    return {
+      resumo: resumoRows[0] || {},
+      porCluster: clusterRows,
+      causas: causasRows
+    };
+  }
+
   _getFaixaCondition(faixaKey) {
     const expr = 'DATEDIFF(NOW(), DATA_ABERTURA)';
     const mapa = {
@@ -346,12 +432,14 @@ class BacklogModel {
       baseParams.push(String(causa).toUpperCase());
     }
 
-    const colunas = opcoes.todasColunas ? '*' : COLUNAS_MODAL;
+    const colunas = opcoes.todasColunas ? '*' : `${COLUNAS_MODAL}, DATA_STATUS`;
     const query = `
-      SELECT ${colunas}, DATEDIFF(NOW(), DATA_ABERTURA) AS dias_abertos
+      SELECT ${colunas},
+        DATEDIFF(NOW(), DATA_ABERTURA) AS dias_abertos,
+        DATEDIFF(NOW(), DATA_STATUS) AS dias_pendencia
       FROM backlog_elos
       WHERE ${baseConds.join(' AND ')}
-      ORDER BY DATEDIFF(NOW(), DATA_ABERTURA) DESC, DATA_ABERTURA ASC
+      ORDER BY DATEDIFF(NOW(), DATA_STATUS) DESC, DATA_ABERTURA ASC
     `;
     const [rows] = await pool.query(query, baseParams);
     return rows;
@@ -374,6 +462,13 @@ class BacklogModel {
   }
 
   async upsertAnotacao(codSs, { previsao, status_prev, observacao }) {
+    const valores = [
+      String(codSs),
+      previsao || null,
+      String(status_prev || ''),
+      observacao || null
+    ];
+    // Mantém o snapshot atual (backlog_anotacoes) e registra no histórico
     await pool.query(
       `INSERT INTO backlog_anotacoes (cod_ss, previsao, status_prev, observacao)
        VALUES (?, ?, ?, ?)
@@ -382,13 +477,25 @@ class BacklogModel {
          status_prev   = VALUES(status_prev),
          observacao    = VALUES(observacao),
          atualizado_em = CURRENT_TIMESTAMP`,
-      [
-        String(codSs),
-        previsao || null,
-        String(status_prev || ''),
-        observacao || null
-      ]
+      valores
     );
+    await pool.query(
+      `INSERT INTO backlog_anotacoes_historico (cod_ss, previsao, status_prev, observacao)
+       VALUES (?, ?, ?, ?)`,
+      valores
+    );
+  }
+
+  async getHistoricoAnotacoes(codSs) {
+    const [rows] = await pool.query(
+      `SELECT previsao, status_prev, observacao, criado_em
+       FROM backlog_anotacoes_historico
+       WHERE cod_ss = ?
+       ORDER BY criado_em DESC, id DESC
+       LIMIT 50`,
+      [String(codSs)]
+    );
+    return rows;
   }
 }
 

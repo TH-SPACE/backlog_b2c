@@ -1,9 +1,5 @@
 document.getElementById('ano').textContent = new Date().getFullYear();
 
-// ── Ícones SVG inline ────────────────────────────────────────────────────
-const ICONE_EDITAR = `<img src="/svg/vivo-notebook-engrenagens-purpura-centro-320x320.svg" width="18" height="18" style="vertical-align:middle;opacity:.7" alt="gerenciar" />`;
-const ICONE_VER    = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3" fill="#16a34a" stroke="#16a34a"/></svg>`;
-
 // Padrão: Centro Oeste pré-selecionado
 const DEFAULT_REGIONAIS = ['CENTRO OESTE'];
 const DEFAULT_TECNOLOGIAS = ['GPON'];
@@ -18,6 +14,37 @@ const modalOrdensState = {
   cluster: '',
   faixa: ''
 };
+
+const MODAL_THEAD_BASE = '<th>Gerenciar</th><th>OS</th><th>Cluster</th><th>Status</th><th>Status Reason</th><th>Data Abertura</th><th>Dias Abertos</th>';
+const MODAL_THEAD_ANOT = '<th>Previsão</th><th>Status Prev.</th><th>Observação</th>';
+const MODAL_THEAD_PADRAO = MODAL_THEAD_BASE + MODAL_THEAD_ANOT;                              // 10 colunas
+const MODAL_THEAD_TECNICA = MODAL_THEAD_BASE + '<th>Dias na Pendência</th>' + MODAL_THEAD_ANOT; // 11 colunas
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Gerenciadas (com anotação) primeiro; dentro de cada grupo mantém a ordem da query
+function ordenarPorGerenciamento(ordens, anotacoesMap) {
+  const temAnot = o => {
+    const a = anotacoesMap[o.COD_SS];
+    return (a && (a.status_prev || a.previsao || a.observacao)) ? 1 : 0;
+  };
+  return [...ordens].sort((a, b) => temAnot(b) - temAnot(a));
+}
+
+// Células de Previsão / Status / Observação da anotação de uma OS
+function celulasAnotacao(anot) {
+  const prev = anot && anot.previsao
+    ? new Date(anot.previsao).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+    : '—';
+  const status = anot && anot.status_prev ? escapeHtml(anot.status_prev) : '—';
+  const obs = anot && anot.observacao ? escapeHtml(anot.observacao) : '—';
+  return `
+        <td class="td-center td-anot-prev">${prev}</td>
+        <td class="td-center td-anot-status">${status}</td>
+        <td class="td-anot-obs">${obs}</td>`;
+}
 
 // ── Dropdown com checkbox ──────────────────────────────────────────────────
 
@@ -182,16 +209,26 @@ async function carregarDados() {
 
   tbody.innerHTML = '<tr><td colspan="12" class="td-loading">Carregando dados...</td></tr>';
   tbodyTecnica.innerHTML = '<tr><td colspan="5" class="td-loading">Carregando pendências técnicas...</td></tr>';
+  document.getElementById('tbody-cluster-tecnica').innerHTML = '<tr><td colspan="10" class="td-loading">Carregando...</td></tr>';
+  document.getElementById('aging-grid').innerHTML = '<div class="td-loading">Carregando...</div>';
   estadoMsg.innerHTML = '';
 
   document.querySelectorAll('.dropdown-check-menu.open').forEach(m => m.classList.remove('open'));
 
   try {
-    const res = await fetch(`/api/dados${buildQueryString()}`);
+    const [res, resPainel] = await Promise.all([
+      fetch(`/api/dados${buildQueryString()}`),
+      fetch(`/api/tecnica/painel${buildQueryString()}`)
+    ]);
     if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
     const data = await res.json();
 
     if (data.erro) throw new Error(data.erro);
+
+    if (resPainel.ok) {
+      const painel = await resPainel.json();
+      if (!painel.erro) renderVisaoGestao(painel);
+    }
 
     // Resumo
     document.getElementById('atualizado-em').textContent = data.atualizadoEm;
@@ -251,6 +288,70 @@ function renderPendenciasTecnicas(payload) {
         <td class="td-center">${fmt(c.qtd_tecnica_cabeamento, 'TECNICA + CABEAMENTO')}</td>
         <td class="td-center">${fmt(c.total, '')}</td>
         <td class="td-center">${pct}%</td>
+      </tr>`;
+  }).join('');
+}
+
+// ── Visão de Gestão — Pendências Técnicas ─────────────────────────────────
+
+function renderVisaoGestao(painel) {
+  const r = painel.resumo || {};
+  const total = Number(r.total || 0);
+  const gerenciadas = Number(r.gerenciadas || 0);
+
+  document.getElementById('pt-gerenciadas').textContent = gerenciadas;
+  document.getElementById('pt-faltam').textContent = total - gerenciadas;
+  document.getElementById('pt-media').textContent = r.media_dias ?? '—';
+  document.getElementById('pt-max').textContent = r.max_dias ?? '—';
+
+  // Cards de envelhecimento
+  const faixas = [
+    { label: '0-2 dias', valor: Number(r.faixa_0_2 || 0), classe: 'aging-ok' },
+    { label: '3-5 dias', valor: Number(r.faixa_3_5 || 0), classe: 'aging-alerta' },
+    { label: '6-10 dias', valor: Number(r.faixa_6_10 || 0), classe: 'aging-grave' },
+    { label: 'Acima de 10 dias', valor: Number(r.faixa_10_mais || 0), classe: 'aging-critico' }
+  ];
+  document.getElementById('aging-grid').innerHTML = faixas.map(f => {
+    const pct = total > 0 ? ((f.valor / total) * 100).toFixed(1) : '0.0';
+    return `
+      <div class="aging-card ${f.classe}">
+        <span class="aging-num">${f.valor}</span>
+        <span class="aging-label">${f.label}</span>
+        <span class="aging-pct">${pct}% do total</span>
+      </div>`;
+  }).join('');
+
+  // Tabela por cluster
+  const tbody = document.getElementById('tbody-cluster-tecnica');
+  const porCluster = painel.porCluster || [];
+  if (!porCluster.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="td-loading">Sem pendências técnicas para os filtros atuais.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = porCluster.map(row => {
+    const tot = Number(row.total || 0);
+    const ger = Number(row.gerenciadas || 0);
+    const faltam = tot - ger;
+    const pct = tot > 0 ? ((ger / tot) * 100).toFixed(1) : 0;
+    const barraClass = pct >= 80 ? 'barra-normal' : pct >= 40 ? 'barra-alerta' : 'barra-critica';
+    const acima10 = Number(row.faixa_10_mais || 0);
+    return `
+      <tr class="${faltam > 0 ? 'linha-ofensor' : 'linha-ok'}">
+        <td class="td-cluster"><strong>${row.CLUSTER_ || '(sem cluster)'}</strong></td>
+        <td class="td-center"><strong>${tot}</strong></td>
+        <td class="td-center">${Number(row.faixa_0_2 || 0)}</td>
+        <td class="td-center">${Number(row.faixa_3_5 || 0)}</td>
+        <td class="td-center">${Number(row.faixa_6_10 || 0)}</td>
+        <td class="td-center">${acima10 > 0 ? `<span class="faixa-chip faixa-ofensor-critico">${acima10}</span>` : '<span class="num-zero">0</span>'}</td>
+        <td class="td-center">${row.media_dias ?? '—'}</td>
+        <td class="td-center">${ger}</td>
+        <td class="td-center">${faltam > 0 ? `<strong>${faltam}</strong>` : '<span class="num-zero">0</span>'}</td>
+        <td class="td-center">
+          <div class="barra-wrapper">
+            <div class="barra-progresso ${barraClass}" style="width:${Math.min(pct, 100)}%"></div>
+            <span class="barra-label">${pct}%</span>
+          </div>
+        </td>
       </tr>`;
   }).join('');
 }
@@ -380,9 +481,10 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
   modalOrdensState.cluster = cluster;
   modalOrdensState.faixa = faixaKey;
   modalOrdensState._tecnica = null;
+  document.getElementById('modal-thead-row').innerHTML = MODAL_THEAD_PADRAO;
   titulo.textContent = `Ordens de Reparo - ${cluster}`;
   subtitulo.textContent = `Faixa: ${faixaLabel[faixaKey] || faixaKey}`;
-  body.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+  body.innerHTML = '<tr><td colspan="10" class="td-loading">Carregando...</td></tr>';
 
   try {
     const queryFiltros = buildQueryString();
@@ -393,7 +495,7 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
     if (data.erro) throw new Error(data.erro);
 
     if (!data.ordens || data.ordens.length === 0) {
-      body.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma ordem encontrada.</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" class="td-loading">Nenhuma ordem encontrada.</td></tr>';
       return;
     }
 
@@ -406,32 +508,32 @@ async function abrirModalOrdens(clusterEnc, faixaKey) {
       if (aRes.ok) anotacoesMap = await aRes.json();
     }
 
-    body.innerHTML = data.ordens.map(o => {
+    body.innerHTML = ordenarPorGerenciamento(data.ordens, anotacoesMap).map(o => {
       const codSs = o.COD_SS ?? '';
       const anot = anotacoesMap[codSs];
       const temAnotacao = !!(anot && (anot.status_prev || anot.previsao || anot.observacao));
-      const iconeCls = temAnotacao ? 'btn-anot-icone btn-anot-preenchido' : 'btn-anot-icone btn-anot-vazio';
-      const iconeTitle = temAnotacao
-        ? `Anotado: ${anot.status_prev || ''}${anot.previsao ? ' | Prev: ' + new Date(anot.previsao).toLocaleString('pt-BR') : ''}`
-        : 'Adicionar anotação';
+      const btnCls = temAnotacao ? 'btn-gerenciar btn-gerenciado' : 'btn-gerenciar';
+      const btnTitle = temAnotacao
+        ? `Gerenciado: ${anot.status_prev || ''}${anot.previsao ? ' | Prev: ' + new Date(anot.previsao).toLocaleString('pt-BR') : ''}`
+        : 'Enviar gerenciamento';
       return `
       <tr>
         <td class="td-center">
-          <button class="${iconeCls}" title="${iconeTitle.replace(/"/g, '&quot;')}"
+          <button class="${btnCls}" title="${btnTitle.replace(/"/g, '&quot;')}"
             onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}')">
-            ${temAnotacao ? ICONE_VER : ICONE_EDITAR}
+            ${temAnotacao ? '✓ Gerenciado' : 'Gerenciar'}
           </button>
         </td>
         <td>${codSs || '—'}</td>
         <td>${o.CLUSTER_ ?? '—'}</td>
-        <td>${o.REGIONAL ?? '—'}</td>
         <td>${o.STATUS ?? '—'}</td>
+        <td>${o.STATUS_REASON ?? '—'}</td>
         <td>${o.DATA_ABERTURA ? new Date(o.DATA_ABERTURA).toLocaleDateString('pt-BR') : '—'}</td>
-        <td class="td-center">${o.dias_abertos ?? '—'}</td>
+        <td class="td-center">${o.dias_abertos ?? '—'}</td>${celulasAnotacao(anot)}
       </tr>`;
     }).join('');
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="7" class="td-loading">Erro ao carregar: ${err.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="10" class="td-loading">Erro ao carregar: ${err.message}</td></tr>`;
   }
 }
 
@@ -473,7 +575,8 @@ async function abrirModalTecnica(causaEnc, statusReasonEnc) {
 
   titulo.textContent    = causa ? `Pendências Técnicas — ${causa}` : 'Pendências Técnicas — Todas as causas';
   subtitulo.textContent = statusReason ? `Status Reason: ${statusReason}` : 'Todos os Status Reasons';
-  body.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+  document.getElementById('modal-thead-row').innerHTML = MODAL_THEAD_TECNICA;
+  body.innerHTML = '<tr><td colspan="11" class="td-loading">Carregando...</td></tr>';
   modal.classList.remove('hidden');
   document.body.classList.add('modal-open');
 
@@ -487,7 +590,7 @@ async function abrirModalTecnica(causaEnc, statusReasonEnc) {
     if (data.erro) throw new Error(data.erro);
 
     if (!data.ordens || data.ordens.length === 0) {
-      body.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma ordem encontrada.</td></tr>';
+      body.innerHTML = '<tr><td colspan="11" class="td-loading">Nenhuma ordem encontrada.</td></tr>';
       return;
     }
 
@@ -499,50 +602,139 @@ async function abrirModalTecnica(causaEnc, statusReasonEnc) {
       if (aRes.ok) anotacoesMap = await aRes.json();
     }
 
-    body.innerHTML = data.ordens.map(o => {
+    body.innerHTML = ordenarPorGerenciamento(data.ordens, anotacoesMap).map(o => {
       const codSs = o.COD_SS ?? '';
       const anot = anotacoesMap[codSs];
       const temAnotacao = !!(anot && (anot.status_prev || anot.previsao || anot.observacao));
-      const iconeCls = temAnotacao ? 'btn-anot-icone btn-anot-preenchido' : 'btn-anot-icone btn-anot-vazio';
-      const iconeTitle = temAnotacao
-        ? `Anotado: ${anot.status_prev || ''}${anot.previsao ? ' | Prev: ' + new Date(anot.previsao).toLocaleString('pt-BR') : ''}`
-        : 'Adicionar anotação';
+      const btnCls = temAnotacao ? 'btn-gerenciar btn-gerenciado' : 'btn-gerenciar';
+      const btnTitle = temAnotacao
+        ? `Gerenciado: ${anot.status_prev || ''}${anot.previsao ? ' | Prev: ' + new Date(anot.previsao).toLocaleString('pt-BR') : ''}`
+        : 'Enviar gerenciamento';
       return `
       <tr>
         <td class="td-center">
-          <button class="${iconeCls}" title="${iconeTitle.replace(/"/g, '&quot;')}"
+          <button class="${btnCls}" title="${btnTitle.replace(/"/g, '&quot;')}"
             onclick="abrirModalAnotacao('${codSs.replace(/'/g, "\\'")}')">
-            ${temAnotacao ? ICONE_VER : ICONE_EDITAR}
+            ${temAnotacao ? '✓ Gerenciado' : 'Gerenciar'}
           </button>
         </td>
         <td>${codSs || '—'}</td>
         <td>${o.CLUSTER_ ?? '—'}</td>
-        <td>${o.REGIONAL ?? '—'}</td>
         <td>${o.STATUS ?? '—'}</td>
+        <td>${o.STATUS_REASON ?? '—'}</td>
         <td>${o.DATA_ABERTURA ? new Date(o.DATA_ABERTURA).toLocaleDateString('pt-BR') : '—'}</td>
         <td class="td-center">${o.dias_abertos ?? '—'}</td>
+        <td class="td-center"><strong>${o.dias_pendencia ?? '—'}</strong></td>${celulasAnotacao(anot)}
       </tr>`;
     }).join('');
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="7" class="td-loading">Erro ao carregar: ${err.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="11" class="td-loading">Erro ao carregar: ${err.message}</td></tr>`;
   }
 }
 
-// ── Modal Anotação ────────────────────────────────────────────────────────
+// ── Modal Gerenciamento (anotação + histórico) ────────────────────────────
 
 const anotacaoState = { codSs: '' };
+
+// Popula o select de hora (06:00 às 22:00, de 30 em 30 min)
+(function popularHoras() {
+  const sel = document.getElementById('anotacao-hora');
+  const opcoes = [];
+  for (let h = 6; h <= 22; h++) {
+    for (const m of ['00', '30']) {
+      if (h === 22 && m === '30') continue;
+      const hora = `${String(h).padStart(2, '0')}:${m}`;
+      opcoes.push(`<option value="${hora}"${hora === '18:00' ? ' selected' : ''}>${hora}</option>`);
+    }
+  }
+  sel.innerHTML = opcoes.join('');
+})();
+
+function setHoraSelect(hora) {
+  const sel = document.getElementById('anotacao-hora');
+  if (![...sel.options].some(opt => opt.value === hora)) {
+    sel.insertAdjacentHTML('beforeend', `<option value="${hora}">${hora}</option>`);
+  }
+  sel.value = hora;
+}
+
+function setPrevisaoRapida(diasAFrente) {
+  const d = new Date();
+  d.setDate(d.getDate() + diasAFrente);
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('anotacao-data').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function limparPrevisao() {
+  document.getElementById('anotacao-data').value = '';
+  document.getElementById('anotacao-hora').value = '18:00';
+}
+
+function mostrarFormGerenciamento() {
+  document.getElementById('acao-novo-gerenciamento').classList.add('hidden');
+  document.getElementById('form-anotacao').classList.remove('hidden');
+}
+
+function cancelarFormGerenciamento() {
+  document.getElementById('form-anotacao').classList.add('hidden');
+  document.getElementById('acao-novo-gerenciamento').classList.remove('hidden');
+}
+
+function renderHistorico(itens) {
+  const div = document.getElementById('anotacao-historico');
+  if (!itens || !itens.length) {
+    div.innerHTML = '<span class="historico-vazio">Nenhum gerenciamento registrado ainda.</span>';
+    return;
+  }
+  div.innerHTML = itens.map(h => {
+    const quando = h.criado_em
+      ? new Date(h.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+      : '—';
+    const prev = h.previsao
+      ? new Date(h.previsao).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+      : null;
+    return `
+      <div class="historico-item">
+        <div class="historico-meta">
+          <span class="historico-quando">${quando}</span>
+          ${h.status_prev ? `<span class="historico-status">${escapeHtml(h.status_prev)}</span>` : ''}
+          ${prev ? `<span class="historico-prev">Prev: ${prev}</span>` : ''}
+        </div>
+        ${h.observacao ? `<div class="historico-obs">${escapeHtml(h.observacao)}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function carregarHistorico(codSs) {
+  const div = document.getElementById('anotacao-historico');
+  div.innerHTML = '<span class="td-loading">Carregando...</span>';
+  try {
+    const res = await fetch(`/api/anotacao/${encodeURIComponent(codSs)}/historico`);
+    if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+    const data = await res.json();
+    renderHistorico(data.historico || []);
+  } catch (err) {
+    div.innerHTML = `<span class="historico-vazio">Erro ao carregar histórico: ${err.message}</span>`;
+  }
+}
 
 async function abrirModalAnotacao(codSs) {
   anotacaoState.codSs = codSs;
   const modal = document.getElementById('modal-anotacao');
   document.getElementById('anotacao-os-label').textContent = `OS: ${codSs}`;
-  document.getElementById('anotacao-previsao').value = '';
+  limparPrevisao();
   document.getElementById('anotacao-status').value = '';
   document.getElementById('anotacao-obs').value = '';
   document.getElementById('btn-salvar-anotacao').disabled = false;
-  document.getElementById('btn-salvar-anotacao').textContent = '💾 Salvar';
+  document.getElementById('btn-salvar-anotacao').textContent = '💾 Enviar Status';
 
-  // Carrega dado existente
+  // Abre mostrando só o histórico; o formulário aparece ao clicar em "novo gerenciamento"
+  cancelarFormGerenciamento();
+
+  modal.classList.remove('hidden');
+  carregarHistorico(codSs);
+
+  // Carrega o último gerenciamento para facilitar a edição
   try {
     const res = await fetch(`/api/anotacoes?codSs=${encodeURIComponent(codSs)}`);
     if (res.ok) {
@@ -550,19 +742,17 @@ async function abrirModalAnotacao(codSs) {
       const a = mapa[codSs];
       if (a) {
         if (a.previsao) {
-          // datetime-local espera "YYYY-MM-DDTHH:MM"
           const d = new Date(a.previsao);
           const pad = n => String(n).padStart(2, '0');
-          document.getElementById('anotacao-previsao').value =
-            `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          document.getElementById('anotacao-data').value =
+            `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+          setHoraSelect(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
         }
         document.getElementById('anotacao-status').value = a.status_prev || '';
         document.getElementById('anotacao-obs').value = a.observacao || '';
       }
     }
   } catch (_) { /* ignora erro de carregamento */ }
-
-  modal.classList.remove('hidden');
 }
 
 function fecharModalAnotacao(event) {
@@ -574,10 +764,12 @@ async function salvarAnotacao(event) {
   event.preventDefault();
   const btn = document.getElementById('btn-salvar-anotacao');
   btn.disabled = true;
-  btn.textContent = 'Salvando...';
+  btn.textContent = 'Enviando...';
 
+  const dataPrev = document.getElementById('anotacao-data').value;
+  const horaPrev = document.getElementById('anotacao-hora').value || '18:00';
   const payload = {
-    previsao: document.getElementById('anotacao-previsao').value || null,
+    previsao: dataPrev ? `${dataPrev}T${horaPrev}` : null,
     status_prev: document.getElementById('anotacao-status').value,
     observacao: document.getElementById('anotacao-obs').value || null
   };
@@ -592,18 +784,36 @@ async function salvarAnotacao(event) {
     const data = await res.json();
     if (data.erro) throw new Error(data.erro);
 
-    // Atualiza o ícone na linha sem recarregar o modal
-    const icon = document.querySelector(`button[onclick*="${CSS.escape(anotacaoState.codSs)}"]`);
-    if (icon) {
-      icon.classList.remove('btn-anot-vazio');
-      icon.classList.add('btn-anot-preenchido');
-      icon.innerHTML = ICONE_VER;
+    // Atualiza o botão e as colunas de anotação na linha sem recarregar o modal
+    const btnLinha = document.querySelector(`button.btn-gerenciar[onclick*="${CSS.escape(anotacaoState.codSs)}"]`);
+    if (btnLinha) {
+      btnLinha.classList.add('btn-gerenciado');
+      btnLinha.textContent = '✓ Gerenciado';
+      const linha = btnLinha.closest('tr');
+      if (linha) {
+        const prevCell = linha.querySelector('.td-anot-prev');
+        const statusCell = linha.querySelector('.td-anot-status');
+        const obsCell = linha.querySelector('.td-anot-obs');
+        if (prevCell) prevCell.textContent = payload.previsao
+          ? new Date(payload.previsao).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+          : '—';
+        if (statusCell) statusCell.textContent = payload.status_prev || '—';
+        if (obsCell) obsCell.textContent = payload.observacao || '—';
+      }
     }
-    document.getElementById('modal-anotacao').classList.add('hidden');
+
+    // Mantém a tela aberta, atualiza o histórico e volta para a visão de histórico
+    carregarHistorico(anotacaoState.codSs);
+    btn.textContent = '✓ Enviado!';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = '💾 Enviar Status';
+      cancelarFormGerenciamento();
+    }, 1200);
   } catch (err) {
     btn.disabled = false;
-    btn.textContent = '💾 Salvar';
-    alert(`Erro ao salvar: ${err.message}`);
+    btn.textContent = '💾 Enviar Status';
+    alert(`Erro ao enviar: ${err.message}`);
   }
 }
 

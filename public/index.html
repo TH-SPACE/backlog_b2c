@@ -19,6 +19,7 @@
       </div>
       <div class="header-right">
         <nav class="header-nav">
+          <a href="/portal.html" class="nav-link">🏠 Portal</a>
           <a href="/" class="nav-link nav-link-active">📋 Dashboard</a>
           <a href="/agenda.html" class="nav-link">📅 Agenda do Dia</a>
         </nav>
@@ -194,6 +195,56 @@
       </div>
     </section>
 
+    <!-- Visão de Gestão — Pendências Técnicas -->
+    <section class="section-cluster section-gestao">
+      <h2 class="section-title"><img src="/svg/vivo-velocimetro-brilho-rosa-centro-320x320.svg" class="svg-title-icon" alt="" /> Visão de Gestão — Tempo na Pendência Técnica</h2>
+
+      <div class="cards-tecnica">
+        <div class="card-tecnica card-pt-ok">
+          <span class="card-tecnica-label">✅ Gerenciadas</span>
+          <span class="card-tecnica-value" id="pt-gerenciadas">—</span>
+        </div>
+        <div class="card-tecnica card-pt-alerta">
+          <span class="card-tecnica-label">⚠️ Faltam Gerenciar</span>
+          <span class="card-tecnica-value" id="pt-faltam">—</span>
+        </div>
+        <div class="card-tecnica">
+          <span class="card-tecnica-label">Média de Dias na Pendência</span>
+          <span class="card-tecnica-value" id="pt-media">—</span>
+        </div>
+        <div class="card-tecnica card-pt-critico">
+          <span class="card-tecnica-label">Mais Antiga (dias)</span>
+          <span class="card-tecnica-value" id="pt-max">—</span>
+        </div>
+      </div>
+
+      <div class="aging-grid" id="aging-grid">
+        <div class="td-loading">Carregando...</div>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="tabela-cluster">
+          <thead>
+            <tr>
+              <th>Cluster</th>
+              <th>Total</th>
+              <th>0-2 dias</th>
+              <th>3-5 dias</th>
+              <th>6-10 dias</th>
+              <th>Acima de 10 dias</th>
+              <th>Média Dias</th>
+              <th>Gerenciadas</th>
+              <th>Faltam</th>
+              <th>% Gerenciado</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-cluster-tecnica">
+            <tr><td colspan="10" class="td-loading">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
   </main>
 
   <div id="modal-ordens" class="modal-overlay hidden" onclick="fecharModalOrdens(event)">
@@ -209,7 +260,7 @@
       <div class="table-wrapper modal-table-wrap">
         <table class="tabela-cluster modal-table">
           <thead>
-            <tr>
+            <tr id="modal-thead-row">
               <th>Gerenciar</th>
               <th>OS</th>
               <th>Cluster</th>
@@ -227,18 +278,40 @@
     </div>
   </div>
 
-  <!-- Sub-modal de Anotação -->
+  <!-- Sub-modal de Gerenciamento -->
   <div id="modal-anotacao" class="modal-overlay hidden" onclick="fecharModalAnotacao(event)">
     <div class="modal-box modal-box-sm" onclick="event.stopPropagation()">
       <div class="modal-header">
-        <h3 id="anotacao-titulo">Anotação</h3>
+        <h3 id="anotacao-titulo">Gerenciar OS</h3>
         <button class="modal-close" onclick="fecharModalAnotacao()">✕</button>
       </div>
       <div class="modal-subtitulo" id="anotacao-os-label"></div>
-      <form id="form-anotacao" onsubmit="salvarAnotacao(event)">
+
+      <div class="historico-bloco historico-bloco-topo">
+        <h4 class="historico-titulo">📜 Histórico de gerenciamento</h4>
+        <div id="anotacao-historico" class="historico-lista">
+          <span class="td-loading">Carregando...</span>
+        </div>
+      </div>
+
+      <div class="form-actions" id="acao-novo-gerenciamento">
+        <button type="button" class="btn-aplicar" onclick="mostrarFormGerenciamento()">➕ Enviar novo gerenciamento</button>
+      </div>
+
+      <form id="form-anotacao" class="hidden" onsubmit="salvarAnotacao(event)">
         <div class="form-group">
           <label class="form-label">Previsão de conclusão</label>
-          <input type="datetime-local" id="anotacao-previsao" class="form-input" />
+          <div class="prev-rapida">
+            <button type="button" class="chip-data" onclick="setPrevisaoRapida(0)">Hoje</button>
+            <button type="button" class="chip-data" onclick="setPrevisaoRapida(1)">Amanhã</button>
+            <button type="button" class="chip-data" onclick="setPrevisaoRapida(2)">+2 dias</button>
+            <button type="button" class="chip-data" onclick="setPrevisaoRapida(7)">+1 semana</button>
+            <button type="button" class="chip-data chip-data-limpar" onclick="limparPrevisao()">Limpar</button>
+          </div>
+          <div class="prev-campos">
+            <input type="date" id="anotacao-data" class="form-input" />
+            <select id="anotacao-hora" class="form-input"></select>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Status</label>
@@ -260,8 +333,8 @@
           <textarea id="anotacao-obs" class="form-input form-textarea" rows="3" placeholder="Descreva a situação..."></textarea>
         </div>
         <div class="form-actions">
-          <button type="button" class="btn-limpar-filtros" onclick="fecharModalAnotacao()">Cancelar</button>
-          <button type="submit" class="btn-aplicar" id="btn-salvar-anotacao">💾 Salvar</button>
+          <button type="button" class="btn-limpar-filtros" onclick="cancelarFormGerenciamento()">Cancelar</button>
+          <button type="submit" class="btn-aplicar" id="btn-salvar-anotacao">💾 Enviar Status</button>
         </div>
       </form>
     </div>
