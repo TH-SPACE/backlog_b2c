@@ -1319,7 +1319,6 @@ body.modal-open {
   .barra-wrapper { min-width: 70px; }
   .btn-gerenciar { padding: 3px 9px; font-size: .68rem; }
   .modal-overlay { padding: 8px; }
-  .td-anot-obs { max-width: 120px; }
 }
 
 /* Telas com pouca altura (notebooks 768px) — modais precisam caber inteiros */
